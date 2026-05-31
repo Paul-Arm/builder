@@ -15,7 +15,7 @@ import type { EntityKind, InventoryDataset, InventoryEntity } from '~~/types/inv
 const { data: inventory, pending, error, refresh } = await useFetch<InventoryDataset>('/api/inventory')
 
 const query = ref('')
-const selectedProjectId = ref('project:checkout')
+const selectedProjectId = useState<string>('builder:selected-project-id', () => '')
 const selectedEntityId = ref('project:checkout')
 
 const entities = computed(() => inventory.value?.entities || [])
@@ -48,6 +48,35 @@ const projects = computed(() => {
         .toLowerCase()
         .includes(normalizedQuery)
     })
+})
+
+watch(allProjects, (nextProjects) => {
+  if (!nextProjects.length) {
+    selectedProjectId.value = ''
+    return
+  }
+
+  if (selectedProjectId.value && nextProjects.some((project) => project.id === selectedProjectId.value)) {
+    return
+  }
+
+  selectedProjectId.value = nextProjects.some((project) => project.id === 'project:checkout')
+    ? 'project:checkout'
+    : nextProjects[0]?.id || ''
+}, { immediate: true })
+
+onMounted(() => {
+  const storedProjectId = window.localStorage.getItem('builder:selected-project-id')
+  if (storedProjectId) {
+    selectedProjectId.value = storedProjectId
+    selectedEntityId.value = storedProjectId
+  }
+})
+
+watch(selectedProjectId, (projectId) => {
+  if (projectId && import.meta.client) {
+    window.localStorage.setItem('builder:selected-project-id', projectId)
+  }
 })
 
 const selectedEntity = computed(() => {
@@ -197,11 +226,32 @@ function iconFor(kind: EntityKind) {
 }
 
 function environmentsForProject(projectId: string) {
-  return sortEnvironmentNames([...new Set(
-    deployments.value
-      .filter((deployment) => projectIdFor(deployment) === projectId)
-      .map((deployment) => deployment.environment)
-  )])
+  const environmentNames = new Set<string>()
+  const project = entities.value.find((entity) => entity.id === projectId)
+
+  if (project) {
+    for (const environment of splitMetadataList(project, 'environments')) {
+      environmentNames.add(environment)
+    }
+  }
+
+  for (const deployment of deployments.value) {
+    if (projectIdFor(deployment) === projectId) {
+      environmentNames.add(deployment.environment)
+    }
+  }
+
+  const ownedIds = new Set(relations.value
+    .filter((relation) => relation.from === projectId && relation.type === 'owns')
+    .map((relation) => relation.to))
+
+  for (const entity of entities.value) {
+    if (ownedIds.has(entity.id) && entity.environment) {
+      environmentNames.add(entity.environment)
+    }
+  }
+
+  return sortEnvironmentNames([...environmentNames])
 }
 
 function serviceCountForProject(projectId: string) {

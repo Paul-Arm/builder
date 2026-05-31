@@ -8,6 +8,7 @@ import type {
   InventoryRelation
 } from '~~/types/inventory'
 import { createSeedInventory } from './seed-inventory'
+import { applyProjectOverlay } from './project-store'
 
 interface SurrealConfig {
   url: string
@@ -19,7 +20,7 @@ interface SurrealConfig {
 
 export async function readInventory(config: SurrealConfig): Promise<InventoryDataset> {
   if (!config.url) {
-    return createSeedInventory()
+    return applyProjectOverlay(createSeedInventory())
   }
 
   const db = new Surreal()
@@ -58,7 +59,7 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
 
     await db.close()
 
-    return {
+    return applyProjectOverlay({
       generatedAt: new Date().toISOString(),
       mode: collectors.some((collector) => collector.mode === 'write_capable') ? 'mixed' : 'read_only',
       source: 'surrealdb',
@@ -67,11 +68,11 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
       deployments: normalizeRows(deployments),
       collectors: normalizeRows(collectors),
       insights: normalizeRows(insights)
-    }
+    })
   } catch (error) {
     await closeQuietly(db)
     console.warn('[inventory-store] Falling back to seed inventory:', error)
-    return createSeedInventory()
+    return applyProjectOverlay(createSeedInventory())
   }
 }
 

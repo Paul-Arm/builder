@@ -429,8 +429,9 @@ function entityCard(
 function sourceComponentCardsFor(lane: Lane, environment: string): DependencyCard[] {
   const repoIds = new Set(sourceRepoEntitiesFor(lane, environment).map((entity) => entity.id))
   const serviceIds = serviceIdsFor(lane, environment)
+  const cards = new Map<string, DependencyCard>()
 
-  return graphData.value.relations
+  for (const card of graphData.value.relations
     .filter((relation) => relation.type === 'contains' && repoIds.has(relation.from) && serviceIds.has(relation.to))
     .map((relation) => {
       const service = entityById.value.get(relation.to)
@@ -448,8 +449,21 @@ function sourceComponentCardsFor(lane: Lane, environment: string): DependencyCar
         variants: []
       }, environment)
     })
-    .filter((card): card is DependencyCard => Boolean(card))
-    .sort(compareCards)
+    .filter((card): card is DependencyCard => Boolean(card))) {
+    cards.set(card.key, card)
+  }
+
+  for (const entity of sourceRepoEntitiesFor(lane, environment)) {
+    const hasComponent = graphData.value.relations.some((relation) => {
+      return relation.type === 'contains' && relation.from === entity.id && serviceIds.has(relation.to)
+    })
+    if (!hasComponent) {
+      const card = entityCard(entity, lane.project.id, {}, environment)
+      cards.set(card.key, card)
+    }
+  }
+
+  return [...cards.values()].sort(compareCards)
 }
 
 function stateBackendCardsFor(lane: Lane, environment: string): DependencyCard[] {
@@ -564,13 +578,31 @@ function setLaneEnvironment(projectId: string, environment: string) {
 }
 
 function environmentOptionsFor(projectId: string) {
-  const environments = props.inventory.deployments
-    .filter((deployment) => deployment.projectId === projectId)
-    .map((deployment) => deployment.environment)
+  const project = entityById.value.get(projectId)
+  const environments = new Set<string>()
+
+  if (project) {
+    for (const environment of metadataEnvironmentNames(project)) {
+      environments.add(environment)
+    }
+  }
+
+  for (const deployment of props.inventory.deployments) {
+    if (deployment.projectId === projectId) {
+      environments.add(deployment.environment)
+    }
+  }
+
+  for (const entityId of projectOwnedEntityIds(projectId)) {
+    const entity = entityById.value.get(entityId)
+    if (entity?.environment) {
+      environments.add(entity.environment)
+    }
+  }
 
   return [
     { label: 'All', value: 'all' },
-    ...sortEnvironmentNames([...new Set(environments)]).map((environment) => ({
+    ...sortEnvironmentNames([...environments]).map((environment) => ({
       label: environment,
       value: environment
     }))
@@ -585,13 +617,18 @@ function projectDeploymentsFor(projectId: string, environment: string) {
 }
 
 function serviceIdsFor(lane: Lane, environment: string) {
-  if (environment === 'all') {
-    return new Set(lane.stages.compute
-      .filter((entity) => entity.kind === 'service')
-      .map((entity) => entity.id))
+  const serviceIds = new Set<string>()
+  for (const entity of lane.stages.compute) {
+    if (entity.kind === 'service' && (environment === 'all' || entityMatchesEnvironment(entity, environment))) {
+      serviceIds.add(entity.id)
+    }
   }
 
-  return new Set(projectDeploymentsFor(lane.project.id, environment).map((deployment) => deployment.serviceId))
+  for (const deployment of projectDeploymentsFor(lane.project.id, environment)) {
+    serviceIds.add(deployment.serviceId)
+  }
+
+  return serviceIds
 }
 
 function serviceEntitiesFor(lane: Lane, environment: string) {
@@ -610,7 +647,9 @@ function sourceRepoEntitiesFor(lane: Lane, environment: string) {
     .filter((relation) => relation.type === 'contains' && serviceIds.has(relation.to))
     .map((relation) => relation.from))
 
-  return lane.stages.source.filter((entity) => repoIds.has(entity.id))
+  return lane.stages.source.filter((entity) => {
+    return repoIds.has(entity.id) || entityMatchesEnvironment(entity, environment)
+  })
 }
 
 function computeTargetEntitiesFor(lane: Lane, environment: string) {
@@ -624,7 +663,9 @@ function computeTargetEntitiesFor(lane: Lane, environment: string) {
     collectInfrastructureIds(deployment.targetId, targetIds)
   }
 
-  return lane.stages.compute.filter((entity) => entity.kind !== 'service' && targetIds.has(entity.id))
+  return lane.stages.compute.filter((entity) => {
+    return entity.kind !== 'service' && (targetIds.has(entity.id) || entityMatchesEnvironment(entity, environment))
+  })
 }
 
 function collectInfrastructureIds(entityId: string, ids: Set<string>, depth = 0) {
@@ -658,7 +699,8 @@ function stateResourceEntitiesFor(lane: Lane, environment: string) {
     .map((relation) => relation.to))
 
   return lane.stages.state.filter((entity) => {
-    return resourceIds.has(entity.id) && entityMatchesEnvironment(entity, environment)
+    return (resourceIds.has(entity.id) || entityMatchesEnvironment(entity, environment))
+      && entityMatchesEnvironment(entity, environment)
   })
 }
 
@@ -681,7 +723,8 @@ function edgeEntitiesFor(lane: Lane, environment: string) {
   }
 
   return lane.stages.edge.filter((entity) => {
-    return edgeIds.has(entity.id) && entityMatchesEnvironment(entity, environment)
+    return (edgeIds.has(entity.id) || entityMatchesEnvironment(entity, environment))
+      && entityMatchesEnvironment(entity, environment)
   })
 }
 
@@ -733,13 +776,46 @@ function relationVisibleForProject(relation: GraphRelation, projectId: string, e
 }
 
 function serviceIdsForProject(projectId: string, environment: string) {
+  const ids = new Set<string>()
+
   if (environment !== 'all') {
-    return new Set(projectDeploymentsFor(projectId, environment).map((deployment) => deployment.serviceId))
+    for (const deployment of projectDeploymentsFor(projectId, environment)) {
+      ids.add(deployment.serviceId)
+    }
+
+    for (const entityId of projectOwnedEntityIds(projectId)) {
+      const entity = entityById.value.get(entityId)
+      if (entity?.kind === 'service' && entityMatchesEnvironment(entity, environment)) {
+        ids.add(entity.id)
+      }
+    }
+
+    return ids
   }
 
-  return new Set(graphData.value.relations
+  for (const entityId of projectOwnedEntityIds(projectId)) {
+    ids.add(entityId)
+  }
+
+  return ids
+}
+
+function projectOwnedEntityIds(projectId: string) {
+  return graphData.value.relations
     .filter((relation) => relation.from === projectId && relation.type === 'owns')
-    .map((relation) => relation.to))
+    .map((relation) => relation.to)
+}
+
+function metadataEnvironmentNames(entity: GraphEntity) {
+  const environments = entity.metadata?.environments
+  if (typeof environments !== 'string') {
+    return []
+  }
+
+  return environments
+    .split(',')
+    .map((environment) => environment.trim())
+    .filter(Boolean)
 }
 
 function serviceIdForRelation(relation: GraphRelation) {

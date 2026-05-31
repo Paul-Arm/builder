@@ -18,6 +18,13 @@ const navigationItems = computed(() => [
     tooltip: true
   },
   {
+    label: 'Projects',
+    to: '/projects',
+    icon: 'i-lucide-folder-kanban',
+    active: isActive('/projects'),
+    tooltip: true
+  },
+  {
     label: 'Providers',
     to: '/collectors',
     icon: 'i-lucide-server',
