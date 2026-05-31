@@ -107,7 +107,7 @@ const emit = defineEmits<{
 }>()
 
 const stages: Array<{ id: GraphStage, label: string, sublabel: string }> = [
-  { id: 'source', label: 'Source', sublabel: 'Repos' },
+  { id: 'source', label: 'Source', sublabel: 'Repo / folder' },
   { id: 'ci', label: 'CI/CD', sublabel: 'Deploy actors' },
   { id: 'compute', label: 'Compute', sublabel: 'Services & targets' },
   { id: 'state', label: 'DB / State', sublabel: 'Data & secrets' },
@@ -328,6 +328,11 @@ function iconFor(kind: GraphKind) {
 
 function nodeName(entity: GraphEntity) {
   if (entity.kind === 'repo') {
+    if (entity.provider === 'local-folder') {
+      const parts = entity.name.split(/[\\/]/).filter(Boolean)
+      return `local: ${parts.at(-1) || entity.name}`
+    }
+
     return entity.name.replace(/^github\.com\//, '')
   }
 
@@ -340,14 +345,8 @@ function stageColumnsFor(lane: Lane, stageId: GraphStage): StageColumn[] {
   if (stageId === 'source') {
     return [
       {
-        id: 'repo',
-        label: 'Repo',
-        cards: sourceRepoEntitiesFor(lane, environment)
-          .map((entity) => entityCard(entity, lane.project.id, {}, environment))
-      },
-      {
-        id: 'component',
-        label: 'Folder / Service',
+        id: 'source',
+        label: 'Repo / Folder',
         cards: sourceComponentCardsFor(lane, environment)
       }
     ]
@@ -389,17 +388,9 @@ function stageColumnsFor(lane: Lane, stageId: GraphStage): StageColumn[] {
   if (stageId === 'edge') {
     return [
       {
-        id: 'ingress',
-        label: 'Ingress',
+        id: 'edge',
+        label: 'Ingress / Events',
         cards: edgeEntitiesFor(lane, environment)
-          .filter((entity) => entity.kind === 'domain')
-          .map((entity) => entityCard(entity, lane.project.id, {}, environment))
-      },
-      {
-        id: 'events',
-        label: 'Events',
-        cards: edgeEntitiesFor(lane, environment)
-          .filter((entity) => entity.kind !== 'domain')
           .map((entity) => entityCard(entity, lane.project.id, {}, environment))
       }
     ]
@@ -443,14 +434,15 @@ function sourceComponentCardsFor(lane: Lane, environment: string): DependencyCar
     .filter((relation) => relation.type === 'contains' && repoIds.has(relation.from) && serviceIds.has(relation.to))
     .map((relation) => {
       const service = entityById.value.get(relation.to)
-      if (!service) {
+      const repo = entityById.value.get(relation.from)
+      if (!service || !repo) {
         return undefined
       }
 
       return entityCard(service, lane.project.id, {
         key: `${lane.project.id}:source-component:${relation.from}:${service.id}`,
         id: `source-component:${relation.from}:${service.id}`,
-        name: sourceComponentName(service),
+        name: nodeName(repo),
         platform: `${sourcePathFor(service)} / ${service.name}`,
         chips: environmentChipsFor(service, environment),
         variants: []
@@ -504,15 +496,6 @@ function stateBackendCardFor(resource: GraphEntity, projectId: string, environme
     chips: environmentChipsFor(resource, environment),
     variants: []
   }
-}
-
-function sourceComponentName(entity: GraphEntity) {
-  const component = entity.metadata?.component
-  if (typeof component === 'string' && component.trim()) {
-    return titleCase(component)
-  }
-
-  return entity.name
 }
 
 function sourcePathFor(entity: GraphEntity) {
@@ -809,7 +792,6 @@ function laneConnectionSpecsFor(lane: Lane) {
   const projectId = lane.project.id
   const environment = selectedEnvironmentFor(projectId)
   const visibleCards = visibleCardsForLane(lane)
-  const serviceIds = serviceIdsForProject(projectId, environment)
   const specs = new Map<string, LaneConnectionSpec>()
 
   for (const relation of graphData.value.relations) {
@@ -819,17 +801,7 @@ function laneConnectionSpecsFor(lane: Lane) {
       continue
     }
 
-    if (relation.type === 'contains' && from.kind === 'repo' && to.kind === 'service' && serviceIds.has(to.id)) {
-      addConnectionSpec(specs, visibleCards, {
-        key: `${relation.id}:source-component`,
-        label: `${nodeName(from)} contains ${nodeName(to)}`,
-        fromKey: `${projectId}:${from.id}`,
-        toKey: `${projectId}:source-component:${from.id}:${to.id}`,
-        fromId: from.id,
-        toId: to.id,
-        type: relation.type,
-        tone: 'compute'
-      })
+    if (relation.type === 'contains') {
       continue
     }
 

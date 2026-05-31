@@ -169,6 +169,25 @@ export function createSeedInventory(): InventoryDataset {
         }
       },
       {
+        id: 'repo:builder-local',
+        kind: 'repo',
+        name: 'C:\\Users\\paulp\\Documents\\builder',
+        provider: 'local-folder',
+        platform: 'workspace',
+        owner: 'Platform',
+        health: 'healthy',
+        description: 'Local builder workspace folder.',
+        tags: ['source', 'local-folder', 'workspace'],
+        confidence: 1,
+        lastSeen: generatedAt,
+        metadata: {
+          default_branch: 'local',
+          branches: 'local',
+          services: 'builder-ui',
+          paths: 'app'
+        }
+      },
+      {
         id: 'cluster:prod-eu',
         kind: 'cluster',
         name: 'k8s-prod-eu',
@@ -358,6 +377,7 @@ export function createSeedInventory(): InventoryDataset {
       relation('repo:commerce-platform', 'service:billing-worker', 'contains', 'github'),
       relation('repo:commerce-platform', 'service:portal-web', 'contains', 'github'),
       relation('repo:builder', 'service:builder-ui', 'contains', 'github'),
+      relation('repo:builder-local', 'service:builder-ui', 'contains', 'local-folder'),
       relation('service:checkout-api', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
       relation('service:billing-worker', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
       relation('service:analytics-ingest', 'cluster:prod-eu', 'runs_on', 'kubernetes'),

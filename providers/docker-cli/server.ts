@@ -14,7 +14,7 @@ import type {
   ProviderObservation,
   ProviderTargetScope
 } from '~~/types/providers'
-import type { ProviderCollectResult, ProviderPlugin } from './types'
+import type { ProviderCollectResult, ProviderPlugin } from '../../server/providers/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -38,6 +38,7 @@ export const dockerCliProvider: ProviderPlugin = {
     displayName: 'Docker CLI',
     version: '0.1.0',
     description: 'Docker-compatible local runtime provider for Docker Desktop, OrbStack, Colima, and remote contexts.',
+    types: ['runtime.container', 'deployment.lifecycle'],
     roles: ['inventory.provider', 'deployment.provider'],
     capabilities: [
       'inventory.discover',
@@ -47,6 +48,36 @@ export const dockerCliProvider: ProviderPlugin = {
       'deployments.stop',
       'deployments.restart',
       'deployments.create.preview'
+    ],
+    addOptions: [
+      {
+        id: 'docker-context',
+        label: 'Docker context',
+        description: 'Add a Docker-compatible runtime target such as OrbStack, Docker Desktop, Colima, or SSH context.',
+        type: 'runtime.container',
+        capability: 'runtime.contexts.add',
+        configSchema: {
+          context: {
+            type: 'string',
+            title: 'Docker context',
+            placeholder: 'orbstack'
+          }
+        }
+      },
+      {
+        id: 'compose-app',
+        label: 'Compose app',
+        description: 'Add a compose application as a manageable deployment group.',
+        type: 'deployment.lifecycle',
+        capability: 'deployments.compose.add',
+        configSchema: {
+          composeFile: {
+            type: 'string',
+            title: 'Compose file',
+            placeholder: 'compose.yml'
+          }
+        }
+      }
     ],
     configSchema: {
       dockerContext: {

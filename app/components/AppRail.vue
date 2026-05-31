@@ -18,11 +18,18 @@ const navigationItems = computed(() => [
     tooltip: true
   },
   {
-    label: 'Collectors',
+    label: 'Providers',
     to: '/collectors',
     icon: 'i-lucide-server',
     active: isActive('/collectors'),
     badge: props.collectorCount,
+    tooltip: true
+  },
+  {
+    label: 'Targets',
+    to: '/targets',
+    icon: 'i-lucide-crosshair',
+    active: isActive('/targets'),
     tooltip: true
   }
 ])

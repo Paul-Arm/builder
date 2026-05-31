@@ -1,20 +1,39 @@
 export type ProviderRole = string
+export type ProviderType = string
 export type ProviderCapability = string
 export type ProviderMode = 'read_only' | 'write_capable'
 export type ProviderConnectionStatus = 'connected' | 'degraded' | 'disabled'
 export type DeploymentRuntimeStatus = 'running' | 'stopped' | 'unknown'
 export type DeploymentActionKind = 'start' | 'stop' | 'restart' | 'create'
 export type DeploymentActionRisk = 'low' | 'medium' | 'high'
+export type ProviderUiSurface = 'provider.panel' | 'add.option.panel'
 
 export interface ProviderManifest {
   id: string
   displayName: string
   version: string
   description: string
+  types: ProviderType[]
   roles: ProviderRole[]
   capabilities: ProviderCapability[]
+  addOptions: ProviderAddOption[]
+  ui?: ProviderUiExtension
   configSchema?: Record<string, unknown>
   secretSchema?: Record<string, unknown>
+}
+
+export interface ProviderAddOption {
+  id: string
+  label: string
+  description: string
+  type: string
+  capability: ProviderCapability
+  configSchema?: Record<string, unknown>
+}
+
+export interface ProviderUiExtension {
+  component: string
+  surfaces: ProviderUiSurface[]
 }
 
 export interface ProviderTargetScope {

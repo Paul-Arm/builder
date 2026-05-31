@@ -39,10 +39,27 @@ interface ProviderManifest {
   id: string
   displayName: string
   version: string
+  types: string[]
   roles: string[]
   capabilities: string[]
+  addOptions: ProviderAddOption[]
+  ui?: ProviderUiExtension
   configSchema?: unknown
   secretSchema?: unknown
+}
+
+interface ProviderAddOption {
+  id: string
+  label: string
+  description: string
+  type: string
+  capability: string
+  configSchema?: unknown
+}
+
+interface ProviderUiExtension {
+  component: string
+  surfaces: Array<'provider.panel' | 'add.option.panel'>
 }
 ```
 
@@ -62,6 +79,105 @@ traces.query
 metrics.query
 dashboards.link
 ```
+
+Types sind ebenfalls Strings und duerfen mehrfach gesetzt werden. Sie ordnen Provider fachlich ein, ohne den Core auf feste Anbieter zu begrenzen:
+
+```txt
+source.repo
+source.folder
+ci.workflow
+hosting.pages
+runtime.container
+deployment.lifecycle
+observability.logs
+observability.traces
+```
+
+Beispiele:
+
+```txt
+github:
+  source.repo
+  ci.workflow
+  hosting.pages
+
+local-folder:
+  source.folder
+  workspace.local
+
+docker-cli:
+  runtime.container
+  deployment.lifecycle
+```
+
+`addOptions` kommen ebenfalls aus dem Provider. Die UI zeigt dadurch nur das an, was der ausgewaehlte Provider wirklich erzeugen kann, z.B. `Repository`, `Workspace folder`, `Docker context` oder `Compose app`. Der Core muss dafuer keine GitHub-, Local-Folder- oder Docker-spezifischen Optionen kennen.
+
+`ui` ist optional. Der Core rendert nur einen `ProviderExtensionHost`; dieser loest `ui.component` gegen eine registrierte Vue-Komponente auf. Damit kann ein Provider spaeter eigene Panels fuer Setup, Preview, Mapping oder Actions mitbringen. Provider ohne eigene UI fallen auf das generische Manifest-Panel zurueck.
+
+Startpunkt:
+
+```txt
+local-folder:
+  ui.component: local-folder-panel
+  surfaces:
+    provider.panel
+    add.option.panel
+```
+
+## Provider Package Layout
+
+Provider-spezifischer Server-Code und UI liegen zusammen unter `providers/<provider-name>`:
+
+```txt
+providers/
+  github/
+    server.ts
+    ProviderPanel.vue
+    types.ts
+  local-folder/
+    server.ts
+    ProviderPanel.vue
+    types.ts
+  docker-cli/
+    server.ts
+```
+
+Der Core behaelt nur Registry und Host:
+
+```txt
+server/providers/registry.ts
+server/providers/types.ts
+app/components/provider-ui/ProviderExtensionHost.vue
+```
+
+## Secrets
+
+Provider-Secrets werden nicht im Manifest, Runtime-Snapshot oder UI-State gespeichert. Fuer lokale Entwicklung gibt es einen verschluesselten Store:
+
+```txt
+.data/secrets.enc.json
+```
+
+Der Store ist in `.gitignore` abgedeckt und wird mit AES-256-GCM verschluesselt. Der Master-Key kommt ausschliesslich aus `BUILDER_SECRET_KEY`. Ohne diesen Key koennen Provider Secrets aus Env lesen, aber keine neuen Secrets ueber die UI speichern.
+
+## GitHub Provider
+
+Der GitHub Provider nutzt die GitHub REST API mit `Accept: application/vnd.github+json` und `X-GitHub-Api-Version`. Fuer den ersten read-only Sync werden diese Rechte erwartet:
+
+```txt
+Fine-grained PAT:
+  Metadata: read
+  Actions: read
+```
+
+Der Provider liest:
+
+- `GET /user` zur Token-Pruefung.
+- `GET /user/repos` fuer Repositories, auf die der Token Zugriff hat.
+- `GET /repos/{owner}/{repo}/branches` fuer Branches.
+- `GET /repos/{owner}/{repo}/actions/workflows` fuer Workflows.
+
+Tokens werden nur als `Authorization: Bearer <token>` an GitHub gesendet, nie in Observations oder API-Antworten zurueckgegeben. Die UI zeigt nur Quelle, Fingerprint und Status.
 
 ## Deployment Management
 
@@ -144,5 +260,6 @@ Ohne Labels kann der Provider raten, aber mit niedrigerer `confidence`.
 2. Provider Registry im Server.
 3. Erster `docker-cli` Provider mit `deployments.list` und Action Plans fuer Start/Stop/Restart.
 4. API Endpoint `/api/providers/runtime`.
-5. Collectors-Seite als Provider-Konsole: Provider, Targets, Deployments, Action Plan Preview.
-6. Spaeter: SSH/Agent Transport und Grafana Provider.
+5. Provider-Seite als Konsole fuer Provider, Collector-Instanzen, Deployments und Action Plan Preview.
+6. Targets-Seite fuer konkrete Runtime-Scope-Details wie Geraete, Docker Daemons, Cluster und Cloud Accounts.
+7. Spaeter: SSH/Agent Transport und Grafana Provider.

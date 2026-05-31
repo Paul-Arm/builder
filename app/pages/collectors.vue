@@ -1,35 +1,36 @@
 <script setup lang="ts">
 import {
   ActivityIcon,
-  CloudIcon,
-  DatabaseIcon,
   LayersIcon,
   ServerIcon,
   TerminalIcon
 } from '@lucide/vue'
+import ProviderExtensionHost from '~/components/provider-ui/ProviderExtensionHost.vue'
 import type { Component } from 'vue'
 import type { InventoryDataset } from '~~/types/inventory'
 import type {
   DeploymentActionKind,
   DeploymentActionPlan,
   DeploymentActionResult,
-  ProviderCollectorInstance,
   ProviderDeploymentRef,
   ProviderManifest,
-  ProviderRuntimeSnapshot,
-  ProviderTargetScope
+  ProviderRuntimeSnapshot
 } from '~~/types/providers'
 
-const { data: inventory, refresh: refreshInventory } = await useFetch<InventoryDataset>('/api/inventory')
+const { data: inventory, refresh: refreshInventory } = useFetch<InventoryDataset>('/api/inventory', {
+  lazy: true
+})
 const {
   data: runtime,
   pending,
   error,
   refresh: refreshRuntime
-} = await useFetch<ProviderRuntimeSnapshot>('/api/providers/runtime')
+} = useFetch<ProviderRuntimeSnapshot>('/api/providers/runtime', {
+  lazy: true
+})
 
 const query = ref('')
-const selectedProviderId = ref<string>('all')
+const selectedProviderId = ref<string>('')
 const selectedPlan = ref<DeploymentActionPlan>()
 const selectedResult = ref<DeploymentActionResult>()
 const planningKey = ref('')
@@ -41,19 +42,21 @@ const collectors = computed(() => runtime.value?.collectors || [])
 const deployments = computed(() => runtime.value?.deployments || [])
 const observations = computed(() => runtime.value?.observations || [])
 
-const providerOptions = computed(() => [
-  { label: 'All providers', value: 'all' },
-  ...providers.value.map((provider) => ({
-    label: provider.displayName,
-    value: provider.id
-  }))
-])
+const activeProviderId = computed(() => selectedProviderId.value || providers.value[0]?.id || '')
+
+const selectedProvider = computed(() => providerFor(activeProviderId.value))
+
+const filteredCollectors = computed(() => {
+  return collectors.value.filter((collector) => {
+    return collector.providerId === activeProviderId.value
+  })
+})
 
 const filteredDeployments = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
 
   return deployments.value.filter((deployment) => {
-    const matchesProvider = selectedProviderId.value === 'all' || deployment.providerId === selectedProviderId.value
+    const matchesProvider = deployment.providerId === activeProviderId.value
     const matchesQuery = !normalizedQuery || [
       deployment.name,
       deployment.service,
@@ -66,6 +69,16 @@ const filteredDeployments = computed(() => {
 
     return matchesProvider && matchesQuery
   })
+})
+
+const filteredObservations = computed(() => {
+  return observations.value.filter((observation) => {
+    return observation.providerId === activeProviderId.value
+  })
+})
+
+const visibleCapabilities = computed(() => {
+  return selectedProvider.value?.capabilities.slice(0, 12) || []
 })
 
 const collectorCount = computed(() => collectors.value.length || inventory.value?.collectors.length || 0)
@@ -85,8 +98,16 @@ function targetFor(id: string) {
   return targets.value.find((target) => target.id === id)
 }
 
-function collectorFor(id: string) {
-  return collectors.value.find((collector) => collector.id === id)
+function selectProvider(provider: ProviderManifest) {
+  selectedProviderId.value = provider.id
+}
+
+function providerCollectorCount(providerId: string) {
+  return collectors.value.filter((collector) => collector.providerId === providerId).length
+}
+
+function providerDeploymentCount(providerId: string) {
+  return deployments.value.filter((deployment) => deployment.providerId === providerId).length
 }
 
 function iconForProvider(provider: ProviderManifest): Component {
@@ -105,23 +126,27 @@ function iconForProvider(provider: ProviderManifest): Component {
   return TerminalIcon
 }
 
-function iconForTarget(target: ProviderTargetScope): Component {
-  if (target.kind.includes('cloud') || target.kind.includes('cluster')) {
-    return CloudIcon
-  }
-
-  if (target.kind.includes('docker') || target.kind.includes('device')) {
-    return ServerIcon
-  }
-
-  return DatabaseIcon
-}
-
 async function refreshAll() {
   selectedPlan.value = undefined
   selectedResult.value = undefined
   await Promise.all([refreshInventory(), refreshRuntime()])
 }
+
+watch(providers, (nextProviders) => {
+  if (!nextProviders.length) {
+    selectedProviderId.value = ''
+    return
+  }
+
+  if (!selectedProviderId.value || !nextProviders.some((provider) => provider.id === selectedProviderId.value)) {
+    selectedProviderId.value = nextProviders[0]?.id || ''
+  }
+}, { immediate: true })
+
+watch(selectedProvider, (provider) => {
+  selectedPlan.value = undefined
+  selectedResult.value = undefined
+}, { immediate: true })
 
 async function planDeploymentAction(deployment: ProviderDeploymentRef, action: DeploymentActionKind) {
   planningKey.value = `${deployment.id}:${action}`
@@ -213,21 +238,10 @@ function actionColor(action: DeploymentActionKind) {
       <header class="topbar">
         <div>
           <p class="eyebrow">Provider runtime</p>
-          <h1>Collectors, Provider, Deployments</h1>
+          <h1>Providers, Collectors, Deployments</h1>
         </div>
 
         <div class="topbar-actions">
-          <USelect
-            v-model="selectedProviderId"
-            :items="providerOptions"
-            value-key="value"
-            label-key="label"
-            size="md"
-            color="neutral"
-            class="w-full sm:w-52"
-            aria-label="Provider"
-          />
-
           <UInput
             v-model="query"
             icon="i-lucide-search"
@@ -257,10 +271,14 @@ function actionColor(action: DeploymentActionKind) {
               <span>{{ providers.length }}</span>
             </div>
 
-            <article
+            <button
               v-for="provider in providers"
               :key="provider.id"
-              class="provider-card"
+              type="button"
+              class="provider-card provider-select-card"
+              :class="{ selected: activeProviderId === provider.id }"
+              :aria-pressed="activeProviderId === provider.id"
+              @click="selectProvider(provider)"
             >
               <div class="collector-card-icon">
                 <component :is="iconForProvider(provider)" :size="18" />
@@ -270,33 +288,23 @@ function actionColor(action: DeploymentActionKind) {
                 <span>{{ provider.id }} / v{{ provider.version }}</span>
                 <small>{{ provider.description }}</small>
                 <div class="provider-chip-list">
+                  <span
+                    v-for="type in provider.types"
+                    :key="`${provider.id}:type:${type}`"
+                    data-category="type"
+                  >
+                    {{ type }}
+                  </span>
                   <span v-for="role in provider.roles" :key="`${provider.id}:${role}`">{{ role }}</span>
                 </div>
+                <div class="provider-card-stats">
+                  <span>{{ providerCollectorCount(provider.id) }} collectors</span>
+                  <span>{{ providerDeploymentCount(provider.id) }} deployments</span>
+                </div>
               </div>
-            </article>
+            </button>
           </section>
 
-          <section class="collector-page-panel">
-            <div class="panel-heading">
-              <h2>Targets</h2>
-              <span>{{ targets.length }}</span>
-            </div>
-
-            <article
-              v-for="target in targets"
-              :key="target.id"
-              class="provider-card compact"
-            >
-              <div class="collector-card-icon">
-                <component :is="iconForTarget(target)" :size="18" />
-              </div>
-              <div class="provider-card-main">
-                <strong>{{ target.name }}</strong>
-                <span>{{ target.kind }} / {{ target.transport.label }}</span>
-                <small>{{ target.description || target.transport.type }}</small>
-              </div>
-            </article>
-          </section>
         </aside>
 
         <section class="deployment-panel">
@@ -345,18 +353,28 @@ function actionColor(action: DeploymentActionKind) {
             </div>
           </article>
 
-          <p v-if="!filteredDeployments.length" class="muted">Keine Deployments im aktuellen Provider-Filter.</p>
+          <p v-if="!filteredDeployments.length" class="muted">
+            Keine Deployments fuer {{ selectedProvider?.displayName || 'diesen Provider' }}.
+          </p>
         </section>
 
         <aside class="provider-column">
+          <ProviderExtensionHost
+            :provider="selectedProvider"
+            :collectors="filteredCollectors"
+            :observations="filteredObservations"
+            :targets="targets"
+            @refresh="refreshAll"
+          />
+
           <section class="collector-page-panel">
             <div class="panel-heading">
               <h2>Collectors</h2>
-              <span>{{ collectors.length }}</span>
+              <span>{{ filteredCollectors.length }}</span>
             </div>
 
             <article
-              v-for="collector in collectors"
+              v-for="collector in filteredCollectors"
               :key="collector.id"
               class="collector-card compact"
             >
@@ -374,6 +392,10 @@ function actionColor(action: DeploymentActionKind) {
                 <small>{{ formatDate(collector.lastRun) }}</small>
               </div>
             </article>
+
+            <p v-if="!filteredCollectors.length" class="muted">
+              Keine Collectors fuer {{ selectedProvider?.displayName || 'diesen Provider' }}.
+            </p>
           </section>
 
           <section class="collector-page-panel action-plan-panel">
@@ -418,11 +440,11 @@ function actionColor(action: DeploymentActionKind) {
           <section class="collector-page-panel">
             <div class="panel-heading">
               <h2>Observations</h2>
-              <span>{{ observations.length }}</span>
+              <span>{{ filteredObservations.length }}</span>
             </div>
             <div class="provider-chip-list">
               <span
-                v-for="capability in providers.flatMap((provider) => provider.capabilities).slice(0, 12)"
+                v-for="capability in visibleCapabilities"
                 :key="capability"
               >
                 {{ capabilityLabel(capability) }}

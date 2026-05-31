@@ -5,22 +5,37 @@ import type {
   DeploymentActionResult,
   ProviderRuntimeSnapshot
 } from '~~/types/providers'
-import { dockerCliProvider } from './docker-cli'
+import { dockerCliProvider } from '../../providers/docker-cli/server'
+import { githubProvider } from '../../providers/github/server'
+import { localFolderProvider } from '../../providers/local-folder/server'
 import type { ProviderCollectResult, ProviderPlugin } from './types'
 
 const providers: ProviderPlugin[] = [
+  githubProvider,
+  localFolderProvider,
   dockerCliProvider
 ]
+
+let runtimeCache:
+  | {
+    expiresAt: number
+    snapshot: ProviderRuntimeSnapshot
+  }
+  | undefined
 
 export function providerManifests() {
   return providers.map((provider) => provider.manifest)
 }
 
 export async function collectProviderRuntime(): Promise<ProviderRuntimeSnapshot> {
+  if (runtimeCache && runtimeCache.expiresAt > Date.now()) {
+    return runtimeCache.snapshot
+  }
+
   const generatedAt = new Date().toISOString()
   const results = await Promise.all(providers.map((provider) => provider.collectRuntime()))
 
-  return {
+  const snapshot = {
     generatedAt,
     providers: providerManifests(),
     targets: results.map((result) => result.target),
@@ -29,6 +44,13 @@ export async function collectProviderRuntime(): Promise<ProviderRuntimeSnapshot>
     observations: results.flatMap((result) => result.observations),
     actionPlans: defaultActionPlans(results)
   }
+
+  runtimeCache = {
+    expiresAt: Date.now() + 2_000,
+    snapshot
+  }
+
+  return snapshot
 }
 
 export async function planProviderAction(request: DeploymentActionRequest): Promise<DeploymentActionPlan> {
