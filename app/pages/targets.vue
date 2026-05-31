@@ -17,7 +17,8 @@ import type {
 } from '~~/types/providers'
 
 const { data: inventory, refresh: refreshInventory } = useFetch<InventoryDataset>('/api/inventory', {
-  lazy: true
+  lazy: true,
+  server: false
 })
 const {
   data: runtime,
@@ -25,7 +26,8 @@ const {
   error,
   refresh: refreshRuntime
 } = useFetch<ProviderRuntimeSnapshot>('/api/providers/runtime', {
-  lazy: true
+  lazy: true,
+  server: false
 })
 
 const query = ref('')
@@ -35,6 +37,7 @@ const targets = computed(() => runtime.value?.targets || [])
 const collectors = computed(() => runtime.value?.collectors || [])
 const deployments = computed(() => runtime.value?.deployments || [])
 const observations = computed(() => runtime.value?.observations || [])
+const runtimeLoading = computed(() => pending.value || (!runtime.value && !error.value))
 
 const filteredTargets = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
@@ -178,7 +181,7 @@ function formatDate(value?: string) {
         </div>
       </header>
 
-      <div v-if="pending" class="empty-state">Targets werden geladen</div>
+      <div v-if="runtimeLoading" class="empty-state">Targets werden geladen</div>
       <div v-else-if="error" class="empty-state danger">Provider runtime nicht erreichbar</div>
 
       <section v-else class="target-console">

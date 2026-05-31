@@ -27,7 +27,8 @@ const {
   pending: connectionPending,
   refresh: refreshConnection
 } = useFetch<GitHubConnectionStatus>('/api/providers/github/connection', {
-  lazy: true
+  lazy: true,
+  server: false
 })
 
 const selectedAddOptionId = ref('')

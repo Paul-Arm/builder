@@ -384,40 +384,47 @@ async function listRepositories(token: string) {
 }
 
 async function collectRepositoryDetails(token: string, repositories: GitHubRepository[]) {
-  const detailLimit = numberFromEnv('BUILDER_GITHUB_DETAIL_REPOSITORIES', 30)
-  const branches: Array<{ repository: GitHubRepository, branch: GitHubBranch }> = []
-  const workflows: Array<{ repository: GitHubRepository, workflow: GitHubWorkflow }> = []
-  const errors: Array<{ repository: GitHubRepository, surface: string, message: string }> = []
-
-  for (const repository of repositories.slice(0, detailLimit)) {
-    try {
-      const branchResponse = await githubRequest<GitHubBranch[]>(
-        `/repos/${encodeURIComponent(repository.owner.login)}/${encodeURIComponent(repository.name)}/branches?per_page=100`,
-        token
-      )
-      branches.push(...branchResponse.data.map((branch) => ({ repository, branch })))
-    } catch (error) {
-      errors.push({
-        repository,
-        surface: 'branches',
-        message: githubErrorSummary(error)
-      })
+  const detailLimit = numberFromEnv('BUILDER_GITHUB_DETAIL_REPOSITORIES', 0)
+  const branches: Array<{ repository: GitHubRepository, branch: GitHubBranch }> = repositories.map((repository) => ({
+    repository,
+    branch: {
+      name: repository.default_branch
     }
-
+  }))
+  const workflowResults = detailLimit > 0
+    ? await Promise.all(repositories.slice(0, detailLimit).map(async (repository) => {
     try {
       const workflowResponse = await githubRequest<GitHubWorkflowResponse>(
         `/repos/${encodeURIComponent(repository.owner.login)}/${encodeURIComponent(repository.name)}/actions/workflows?per_page=100`,
         token
       )
-      workflows.push(...workflowResponse.data.workflows.map((workflow) => ({ repository, workflow })))
-    } catch (error) {
-      errors.push({
+      return {
         repository,
-        surface: 'workflows',
-        message: githubErrorSummary(error)
-      })
+        workflows: workflowResponse.data.workflows
+      }
+    } catch (error) {
+      return {
+        repository,
+        workflows: [],
+        error: githubErrorSummary(error)
+      }
     }
-  }
+  }))
+    : []
+
+  const workflows = workflowResults.flatMap((result) => {
+    return result.workflows.map((workflow) => ({
+      repository: result.repository,
+      workflow
+    }))
+  })
+  const errors = workflowResults
+    .filter((result) => result.error)
+    .map((result) => ({
+      repository: result.repository,
+      surface: 'workflows',
+      message: result.error || 'GitHub workflow request failed'
+    }))
 
   return { branches, workflows, errors }
 }

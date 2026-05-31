@@ -1,0 +1,5 @@
+- smartea refreshen der targets  ->  status in db speichern und jobs um periodisch / on demand neue daten zu holen
+-db ?
+- grafana einbinden
+- settings 
+- + documentation zu --projekt-- / node hinzufügen
