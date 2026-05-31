@@ -1,0 +1,31 @@
+{
+  "name": "builder",
+  "version": "0.1.0",
+  "description": "Environment graph for deployments, apps, local hosts, and cloud resources.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@lucide/vue": "^1.17.0",
+    "@nuxt/ui": "^4.8.1",
+    "nuxt": "^4.4.6",
+    "surrealdb": "^2.0.3",
+    "tailwindcss": "^4.3.0",
+    "vue": "^3.5.35",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.111",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.3"
+  }
+}
