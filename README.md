@@ -15,18 +15,28 @@ The first screen models projects, services, deployments, local Mac mini hosts, D
 ## Run
 
 ```bash
+npm run setup
 npm run dev
 ```
 
 ## SurrealDB
 
-The app uses seed data unless `SURREALDB_URL` is set.
+The app uses SurrealDB when `SURREALDB_URL` is set. Local development is wired through Docker Compose and the setup scripts.
 
 ```bash
-cp .env.example .env
+npm run db:up
+npm run db:wait
+npm run db:reset
+npm run db:status
 ```
 
-Apply the initial schema from `surreal/schema.surql`, then insert rows into:
+The setup script runs the same DB steps automatically and also migrates `.data/projects.json` into the `project_overlay` table.
+
+```bash
+npm run setup
+```
+
+The initial schema lives in `surreal/schema.surql`. Base inventory is inserted into:
 
 - `entity`
 - `relation`
@@ -34,7 +44,25 @@ Apply the initial schema from `surreal/schema.surql`, then insert rows into:
 - `collector`
 - `insight`
 
+Manual project edits are stored in `project_overlay`, and UI-saved provider secrets are stored in `provider_secret`. If SurrealDB is unreachable, the app falls back to seed data plus the local `.data` files.
+
 Use a stable `uid` field for graph identities, for example `project:checkout` or `host:mac-mini-01`. The API maps `uid` to the frontend `id` and falls back to the SurrealDB record id when `uid` is missing.
+
+## Codex Environment
+
+In Codex app environment settings, set the Windows setup script to:
+
+```powershell
+cd "$env:CODEX_WORKTREE_PATH"
+.\scripts\setup.ps1
+```
+
+Set the cleanup script to:
+
+```powershell
+cd "$env:CODEX_WORKTREE_PATH"
+.\scripts\teardown.ps1
+```
 
 ## Local Agent Direction
 

@@ -9,11 +9,158 @@ Der erste praktische Use Case ist ein lokales Docker/OrbStack-Setup auf einem Ma
 ## Begriffe
 
 - **Provider**: Plugin-Paket mit Manifest, Capabilities und Implementierung.
-- **Target**: konkretes Ziel, z.B. `mac-mini-01`, `aws-prod`, `k8s-prod-eu`.
-- **Collector Instance**: konfigurierte Verbindung zwischen Provider und Target.
+- **Connection**: wiederverwendbare Zugangskonfiguration, z.B. SSH zu `mac-mini-01`, GitHub Token, Azure ARM Credential, Postgres Login, Proxy oder Jump Host.
+- **Target**: konkret adressierbarer Scope ueber eine Connection, z.B. `docker-daemon:mac-mini-01`, `github:ich/mein-repo`, `azure-postgres-server:pg-1`, `k8s:prod-eu`.
+- **Collector Instance**: konfigurierte Ausfuehrung eines Providers gegen ein Target, optional ueber eine Connection.
 - **Observation**: roher Fakt aus einem Provider, auditierbar und provider-spezifisch.
 - **Normalized Graph**: stabile Builder-Entities und Relations fuer UI, Suche und Actions.
 - **Action Plan**: sicherer, pruefbarer Plan fuer Start/Stop/Restart/Create.
+
+## Modellgrenzen
+
+Das Core-Modell trennt bewusst vier Dinge, die in Infrastruktur-Tools oft ineinander fallen:
+
+```txt
+Provider -> Connection -> Target -> Observation -> Normalized Graph
+```
+
+- Provider beantworten: "Welche Technologie oder welcher Dienst wird angesprochen?"
+- Connections beantworten: "Wie kommt Builder sicher dorthin?"
+- Targets beantworten: "Welcher konkrete Scope wird adressiert?"
+- Observations beantworten: "Was hat der Provider dort gesehen?"
+- Nodes im Normalized Graph beantworten: "Was gehoert fachlich und architektonisch zu meinem Projekt-Stack?"
+
+Targets sind also keine Projekt-Nodes. Ein Target kann selbst als Node sichtbar werden, z.B. ein Docker Daemon, Kubernetes Cluster oder Azure Postgres Server. Es kann aber auch viele Nodes liefern, z.B. Container, Datenbanken, Deployments, Secrets, Queues oder Repositories.
+
+Beispiele:
+
+```txt
+Provider: docker-cli
+Connection: ssh:mac-mini-01
+Target: docker-daemon:mac-mini-01:orbstack
+Nodes:
+  host:mac-mini-01
+  runtime:orbstack
+  container:django-api
+  service:django-api
+Relations:
+  runtime:orbstack runs_on host:mac-mini-01
+  container:django-api runs_on runtime:orbstack
+  service:django-api deployed_as container:django-api
+```
+
+```txt
+Provider: azure-arm, postgres
+Connection: azure:prod-subscription, postgres-login:pg-1
+Target: azure-postgres-server:pg-1
+Nodes:
+  database_server:pg-1
+  database:testing-1
+Relations:
+  database_server:pg-1 contains database:testing-1
+  database:testing-1 managed_by database_server:pg-1
+  service:api uses database:testing-1
+```
+
+## Connection Modell
+
+Connections sollten erstklassige Datensaetze werden, statt nur als `transport` am Target oder als Provider-Config zu leben. Dadurch kann ein SSH-Zugang mehrere Targets tragen, z.B. Bash, Docker Context, Filesystem und Agent auf demselben Mac mini.
+
+Minimaler Vertrag:
+
+```ts
+interface ProviderConnection {
+  id: string
+  name: string
+  kind: string
+  status: 'connected' | 'degraded' | 'disabled' | 'unknown'
+  mode: 'read_only' | 'write_capable'
+  endpoint?: string
+  proxyConnectionId?: string
+  secretRefs: Record<string, string>
+  config: Record<string, string | number | boolean | null>
+  labels: Record<string, string>
+  lastChecked?: string
+}
+```
+
+Beispiele fuer `kind`:
+
+```txt
+local-cli
+local-fs
+ssh
+docker-context
+http-api
+github-token
+azure-arm
+kubeconfig
+postgres-login
+proxy
+agent
+```
+
+Secrets bleiben im Secret Store. Connections speichern nur Secret-Referenzen, Fingerprints, Status und nicht-sensitive Config.
+
+Targets referenzieren dann eine Connection:
+
+```ts
+interface ProviderTargetScope {
+  id: string
+  name: string
+  kind: string
+  connectionId?: string
+  parentTargetId?: string
+  labels: Record<string, string>
+}
+```
+
+Ein Target darf verschachtelt sein. Beispiel: `docker-daemon:mac-mini-01` haengt an `host:mac-mini-01`; `container:django-api` ist kein Target, sondern ein Node aus Observations.
+
+## Node Modell
+
+Nodes sind normalisierte Stack-Bausteine. Sie duerfen aus Providern kommen oder manuell angelegt werden. Provider-spezifische Details gehoeren in `metadata`, stabile Architekturbeziehungen in `relations`.
+
+Empfohlene Node-Arten:
+
+```txt
+project
+service
+repo
+host
+runtime
+container
+cluster
+namespace
+function
+database_server
+database
+storage
+queue
+domain
+secret_store
+external_service
+```
+
+Die aktuelle `database`-Node reicht fuer einfache Datenbanken. Fuer Cloud-Angebote wie Azure Database for PostgreSQL sollte zusaetzlich `database_server` eingefuehrt werden, damit Server/Instanz und einzelne Datenbank nicht vermischt werden.
+
+Typische Relationen:
+
+```txt
+owns
+contains
+runs_on
+deployed_as
+deployed_from
+uses
+publishes
+subscribes
+exposed_by
+managed_by
+secured_by
+reachable_via
+observed_by
+```
 
 ## Provider Rollen
 
@@ -254,6 +401,160 @@ services:
 
 Ohne Labels kann der Provider raten, aber mit niedrigerer `confidence`.
 
+## Open Source Manager Integration
+
+Builder soll keinen kompletten Docker-, Compose- oder Kubernetes-Manager nachbauen. Das Ziel ist ein Projekt-Stack-Graph mit sicheren Action Plans. Externe Manager koennen als optionale Provider integriert werden, wenn sie fuer Betrieb, UI, Agenten oder komplexe Workflows schon gut sind.
+
+Grundregel:
+
+```txt
+Builder owns the graph.
+External managers own their operational surface.
+Providers bridge between both.
+```
+
+Das bedeutet:
+
+- Builder normalisiert Ressourcen zu Nodes und Relations.
+- Externe Manager bleiben fuer Spezial-UI, Logs, Exec, Shell, komplexe Deployments und Low-Level-Operationen zustaendig.
+- Actions laufen in Builder weiterhin ueber `plan -> approve -> apply -> verify -> audit`.
+- Provider duerfen externe Manager-APIs nutzen, aber keine fremde Datenstruktur wird direkt zum Core-Modell.
+- Wo moeglich verwendet Builder native APIs fuer stabile Inventarisierung: Docker Engine API fuer Docker, Kubernetes API fuer Kubernetes.
+- Externe Manager werden bevorzugt verlinkt oder ueber Provider-Panels eingebunden, nicht als versteckte Abhaengigkeit im Core.
+
+### Docker und Compose
+
+Empfohlene Stufen:
+
+1. **Native Docker Provider behalten.** Der aktuelle `docker-cli` Provider ist gut fuer lokale Entwicklung. Spaeter sollte er optional auf Docker Engine API/SDK wechseln, damit Inventory und Actions nicht an CLI-Parsing haengen.
+2. **Connection/Target sauber machen.** Docker via lokalem Socket, SSH Docker Context, Agent oder Proxy sind unterschiedliche Connections auf dasselbe Zielmuster `docker-daemon`.
+3. **Compose als eigene Surface behandeln.** Compose Stacks sind Deployment-Gruppen, nicht nur Containerlisten. Ein Compose Stack kann mehrere Container-Nodes und Service-Nodes erzeugen.
+4. **Optionalen Manager Provider anbieten.** Portainer, Dockge oder Komodo werden als Provider/Bridge integriert, nicht als Ersatz fuer das Builder-Modell.
+
+Kandidaten:
+
+- **Portainer CE**: breitester Docker/Swarm/Kubernetes/ACI-Manager, API vorhanden, kann auch als Gateway zur darunterliegenden Docker/Kubernetes API dienen. Gut als optionaler `portainer` Provider fuer Environments, Stacks, Containers und Deep Links.
+- **Dockge**: schlanker Compose-orientierter Manager. Sinnvoll, wenn der Fokus auf `compose.yaml`-Stacks liegt und nicht auf voller Docker-Verwaltung.
+- **Komodo**: agentenbasierter Multi-Server-Manager mit Periphery-Agent. Sinnvoll, wenn Builder viele VMs/Server ueber Agents erreichen und Git-basierte Deployments koordinieren soll.
+
+Portainer-Integration:
+
+```txt
+Provider: portainer
+Connection: portainer-api-token
+Targets:
+  portainer:endpoint:mac-mini-01
+  docker-daemon:mac-mini-01
+Observations:
+  endpoint
+  stack
+  container
+  image
+  volume
+Nodes:
+  host/runtime/container/service
+Actions:
+  start/stop/restart stack/container via Portainer API
+  deep_link to Portainer UI for advanced operations
+```
+
+Dockge-Integration:
+
+```txt
+Provider: dockge
+Connection: dockge-api/session or reverse proxy
+Targets:
+  compose-host:mac-mini-01
+Observations:
+  compose-stack
+  compose-service
+  compose-file
+Nodes:
+  runtime/container/service
+Actions:
+  compose up/down/restart/pull when exposed by Dockge
+  deep_link to Dockge stack UI
+```
+
+Komodo-Integration:
+
+```txt
+Provider: komodo
+Connection: komodo-api-token
+Targets:
+  komodo-server:mac-mini-01
+  docker-daemon:mac-mini-01
+Observations:
+  server
+  stack
+  deployment
+  repo/build
+Nodes:
+  host/runtime/container/service/repo
+Actions:
+  deploy/redeploy/restart via Komodo Core API
+```
+
+### Kubernetes
+
+Kubernetes sollte nicht ueber einen selbstgebauten Full-Manager bedient werden. Der stabile Kern ist die Kubernetes API mit offiziellen Client Libraries und kubeconfig/ServiceAccount-RBAC. Builder sollte daraus nur die projektbezogenen Nodes und Relations normalisieren.
+
+Empfohlene Stufen:
+
+1. **Native Kubernetes Provider.** Liest Deployments, StatefulSets, Services, Ingress, ConfigMaps, Secrets-Metadaten, Namespaces, Pods und Events ueber Kubernetes API.
+2. **RBAC-first.** Jede Connection ist ein kubeconfig oder ServiceAccount mit klar begrenzten Rechten.
+3. **Action Plans.** Restart rollout, scale, apply manifest, suspend/resume CronJob und port-forward/exec nur mit explizitem Plan und Risiko.
+4. **Manager UI verlinken.** Fuer Cluster-Detailarbeit lieber Headlamp oder Portainer nutzen, statt alles in Builder nachzubauen.
+
+Kandidaten:
+
+- **Headlamp**: Kubernetes SIG UI Projekt, Apache-2.0, pluginfaehig. Gute Wahl fuer eine tiefe K8s-UI neben Builder.
+- **Portainer CE**: kann Docker und Kubernetes in einer UI verwalten und hat eine API. Gut, wenn ein gemeinsamer Manager fuer Docker und K8s gewuenscht ist.
+- **Kubernetes Dashboard**: vor Nutzung pruefen. Stand 2026-06-01 zeigt das offizielle GitHub-Repo auf `kubernetes-retired/dashboard`; daher nicht als neue Hauptintegration planen.
+
+Kubernetes-Provider-Beispiel:
+
+```txt
+Provider: kubernetes
+Connection: kubeconfig:prod-eu
+Target: k8s-cluster:prod-eu
+Observations:
+  namespace
+  deployment
+  statefulset
+  service
+  ingress
+  pod
+Nodes:
+  cluster
+  namespace
+  service
+  runtime/workload
+  domain
+Relations:
+  service runs_on cluster
+  workload contains pod
+  service exposed_by ingress/domain
+```
+
+### Entscheidung
+
+Fuer Builder macht die Integration externer Manager Sinn, aber als Bruecke:
+
+- **Ja zu Integration** fuer Discovery, Deep Links, Aktionen und bestehende Agenten.
+- **Nein zu Abhaengigkeit** im Core. Ein Projektgraph muss auch ohne Portainer, Dockge, Komodo oder Headlamp funktionieren.
+- **Nicht alles selbst bauen.** Builder baut nur die Stack-Sicht, Normalisierung, sichere Plans und Projekt-Kontext. Externe Manager behalten die Low-Level-Bedienung.
+
+Externe Referenzen, Stand 2026-06-01:
+
+- Docker Engine API: https://docs.docker.com/reference/api/engine/
+- Kubernetes Client Libraries: https://kubernetes.io/docs/reference/using-api/client-libraries/
+- Portainer CE/API: https://github.com/portainer/portainer und https://docs.portainer.io/api/docs
+- Dockge: https://github.com/louislam/dockge
+- Komodo: https://komo.do/docs/setup und https://komo.do/docs/setup/connect-servers
+- Headlamp: https://github.com/kubernetes-sigs/headlamp
+- Kubernetes Dashboard Status: https://github.com/kubernetes/dashboard
+
 ## Naechste Umsetzung
 
 1. Shared Provider Types.
@@ -262,4 +563,8 @@ Ohne Labels kann der Provider raten, aber mit niedrigerer `confidence`.
 4. API Endpoint `/api/providers/runtime`.
 5. Provider-Seite als Konsole fuer Provider, Collector-Instanzen, Deployments und Action Plan Preview.
 6. Targets-Seite fuer konkrete Runtime-Scope-Details wie Geraete, Docker Daemons, Cluster und Cloud Accounts.
-7. Spaeter: SSH/Agent Transport und Grafana Provider.
+7. Connection Store fuer SSH, API Tokens, kubeconfig, Azure ARM und Proxy/Agent Setups.
+8. Normalizer von Provider Observations zu Graph Nodes/Relations.
+9. Optionaler Portainer- oder Komodo-Provider fuer Docker/Compose Multi-Host Management.
+10. Kubernetes Provider ueber Kubernetes API plus optional Headlamp/Portainer Deep Links.
+11. Spaeter: SSH/Agent Transport und Grafana Provider.

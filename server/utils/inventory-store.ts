@@ -18,29 +18,34 @@ interface SurrealConfig {
   password: string
 }
 
+const databaseTimeoutMs = numberFromEnv('BUILDER_INVENTORY_DB_TIMEOUT_MS', 1_000)
+const databaseBackoffMs = numberFromEnv('BUILDER_INVENTORY_DB_BACKOFF_MS', 30_000)
+
+let databaseUnavailableUntil = 0
+
 export async function readInventory(config: SurrealConfig): Promise<InventoryDataset> {
-  if (!config.url) {
+  if (!config.url || !canUseDatabase()) {
     return applyProjectOverlay(createSeedInventory())
   }
 
   const db = new Surreal()
 
   try {
-    await db.connect(config.url, {
+    await withTimeout(db.connect(config.url, {
       authentication: config.username && config.password
         ? {
             username: config.username,
             password: config.password
           }
         : undefined
-    })
+    }), databaseTimeoutMs, 'Inventory database connect timed out')
 
-    await db.use({
+    await withTimeout(db.use({
       namespace: config.namespace,
       database: config.database
-    })
+    }), databaseTimeoutMs, 'Inventory database select timed out')
 
-    const [entities, relations, deployments, collectors, insights] = await db
+    const [entities, relations, deployments, collectors, insights] = await withTimeout(db
       .query<[
         InventoryEntity[],
         InventoryRelation[],
@@ -55,7 +60,7 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
         SELECT * FROM insight ORDER BY severity, title;
       `)
       .json()
-      .collect()
+      .collect(), databaseTimeoutMs, 'Inventory database query timed out')
 
     await db.close()
 
@@ -70,6 +75,7 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
       insights: normalizeRows(insights)
     })
   } catch (error) {
+    markDatabaseUnavailable()
     await closeQuietly(db)
     console.warn('[inventory-store] Falling back to seed inventory:', error)
     return applyProjectOverlay(createSeedInventory())
@@ -108,4 +114,34 @@ async function closeQuietly(db: Surreal) {
   } catch {
     // Nothing useful to do during fallback.
   }
+}
+
+function canUseDatabase() {
+  return Date.now() >= databaseUnavailableUntil
+}
+
+function markDatabaseUnavailable() {
+  databaseUnavailableUntil = Date.now() + databaseBackoffMs
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+function numberFromEnv(key: string, fallback: number) {
+  const value = Number(process.env[key])
+  return Number.isFinite(value) && value > 0 ? value : fallback
 }

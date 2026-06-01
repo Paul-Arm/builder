@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createError } from 'h3'
+import { Surreal } from 'surrealdb'
 import type { InventoryDataset, InventoryEntity, InventoryRelation } from '~~/types/inventory'
 import type {
   CreateProjectEnvironmentRequest,
@@ -16,8 +17,26 @@ interface ProjectStoreFile {
   relations: InventoryRelation[]
 }
 
+interface SurrealConfig {
+  url: string
+  namespace: string
+  database: string
+  username: string
+  password: string
+}
+
+interface ProjectOverlayRecord extends ProjectStoreFile {
+  uid: string
+  updatedAt?: string
+}
+
 const storePath = process.env.BUILDER_PROJECT_STORE_PATH
   || join(process.cwd(), '.data', 'projects.json')
+const projectOverlayUid = 'manual-project-overlay'
+const databaseTimeoutMs = numberFromEnv('BUILDER_PROJECT_DB_TIMEOUT_MS', 650)
+const databaseBackoffMs = numberFromEnv('BUILDER_PROJECT_DB_BACKOFF_MS', 30_000)
+
+let databaseUnavailableUntil = 0
 
 export async function readProjectWorkspace(base: InventoryDataset): Promise<ProjectWorkspace> {
   const inventory = await applyProjectOverlay(base)
@@ -263,6 +282,23 @@ export async function createProjectEnvironment(
 }
 
 async function readStore(): Promise<ProjectStoreFile> {
+  const databaseStore = await readDatabaseStore()
+  if (databaseStore) {
+    return databaseStore
+  }
+
+  return readFileStore()
+}
+
+async function writeStore(store: ProjectStoreFile) {
+  if (await writeDatabaseStore(store)) {
+    return
+  }
+
+  await writeFileStore(store)
+}
+
+async function readFileStore(): Promise<ProjectStoreFile> {
   try {
     const raw = await readFile(storePath, 'utf8')
     const parsed = JSON.parse(raw) as Partial<ProjectStoreFile>
@@ -284,11 +320,100 @@ async function readStore(): Promise<ProjectStoreFile> {
   }
 }
 
-async function writeStore(store: ProjectStoreFile) {
+async function writeFileStore(store: ProjectStoreFile) {
   await mkdir(dirname(storePath), { recursive: true })
   const tmpPath = `${storePath}.${process.pid}.tmp`
   await writeFile(tmpPath, `${JSON.stringify(store, null, 2)}\n`, 'utf8')
   await rename(tmpPath, storePath)
+}
+
+async function readDatabaseStore(): Promise<ProjectStoreFile | undefined> {
+  const config = surrealConfigFromEnv()
+  if (!config.url || !canUseDatabase()) {
+    return undefined
+  }
+
+  const db = new Surreal()
+  try {
+    await withTimeout(connectProjectDatabase(db, config), databaseTimeoutMs, 'Project database connect timed out')
+    const [records] = await withTimeout(db
+      .query<[ProjectOverlayRecord[]]>(
+        'SELECT * FROM project_overlay WHERE uid = $uid LIMIT 1;',
+        { uid: projectOverlayUid }
+      )
+      .json()
+      .collect(), databaseTimeoutMs, 'Project database read timed out')
+    await closeQuietly(db)
+    return records?.[0] ? normalizeDatabaseStore(records[0]) : undefined
+  } catch (error) {
+    markDatabaseUnavailable()
+    await closeQuietly(db)
+    console.warn('[project-store] Database read failed, falling back to file store:', error)
+    return undefined
+  }
+}
+
+async function writeDatabaseStore(store: ProjectStoreFile) {
+  const config = surrealConfigFromEnv()
+  if (!config.url || !canUseDatabase()) {
+    return false
+  }
+
+  const db = new Surreal()
+  try {
+    await withTimeout(connectProjectDatabase(db, config), databaseTimeoutMs, 'Project database connect timed out')
+    await withTimeout(db
+      .query(
+        `
+          DEFINE TABLE IF NOT EXISTS project_overlay SCHEMALESS;
+          DEFINE INDEX IF NOT EXISTS project_overlay_uid ON project_overlay FIELDS uid UNIQUE;
+          DELETE project_overlay WHERE uid = $uid;
+          CREATE project_overlay CONTENT $record;
+        `,
+        {
+          uid: projectOverlayUid,
+          record: {
+            uid: projectOverlayUid,
+            version: 1,
+            entities: store.entities,
+            relations: store.relations,
+            updatedAt: new Date().toISOString()
+          } satisfies ProjectOverlayRecord
+        }
+      )
+      .collect(), databaseTimeoutMs, 'Project database write timed out')
+    await closeQuietly(db)
+    return true
+  } catch (error) {
+    markDatabaseUnavailable()
+    await closeQuietly(db)
+    console.warn('[project-store] Database write failed, falling back to file store:', error)
+    return false
+  }
+}
+
+async function connectProjectDatabase(db: Surreal, config: SurrealConfig) {
+  await db.connect(config.url, {
+    authentication: config.username && config.password
+      ? {
+          username: config.username,
+          password: config.password
+        }
+      : undefined
+  })
+
+  await db.use({
+    namespace: config.namespace,
+    database: config.database
+  })
+}
+
+function normalizeDatabaseStore(record?: ProjectOverlayRecord): ProjectStoreFile {
+  return {
+    version: 1,
+    entities: Array.isArray(record?.entities) ? record.entities : [],
+    relations: Array.isArray(record?.relations) ? record.relations : []
+  }
 }
 
 function upsertEntity(store: ProjectStoreFile, entity: InventoryEntity) {
@@ -403,4 +528,54 @@ function sortEnvironmentNames(environments: string[]) {
   return Array.from(new Set(environments)).sort((a, b) => {
     return (rank[a] ?? 50) - (rank[b] ?? 50) || a.localeCompare(b)
   })
+}
+
+async function closeQuietly(db: Surreal) {
+  try {
+    if (db.isConnected) {
+      await db.close()
+    }
+  } catch {
+    // Nothing useful to do during fallback.
+  }
+}
+
+function surrealConfigFromEnv(): SurrealConfig {
+  return {
+    url: process.env.SURREALDB_URL || '',
+    namespace: process.env.SURREALDB_NAMESPACE || 'builder',
+    database: process.env.SURREALDB_DATABASE || 'inventory',
+    username: process.env.SURREALDB_USERNAME || '',
+    password: process.env.SURREALDB_PASSWORD || ''
+  }
+}
+
+function canUseDatabase() {
+  return Date.now() >= databaseUnavailableUntil
+}
+
+function markDatabaseUnavailable() {
+  databaseUnavailableUntil = Date.now() + databaseBackoffMs
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+function numberFromEnv(key: string, fallback: number) {
+  const value = Number(process.env[key])
+  return Number.isFinite(value) && value > 0 ? value : fallback
 }

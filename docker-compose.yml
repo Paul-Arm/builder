@@ -1,0 +1,20 @@
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v2
+    command:
+      - start
+      - --bind
+      - 0.0.0.0:8000
+      - --user
+      - ${SURREALDB_USERNAME:-root}
+      - --pass
+      - ${SURREALDB_PASSWORD:-root}
+      - rocksdb:/data/builder.db
+    ports:
+      - "${SURREALDB_PORT:-8000}:8000"
+    volumes:
+      - surrealdb-data:/data
+    restart: unless-stopped
+
+volumes:
+  surrealdb-data:
