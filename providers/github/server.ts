@@ -113,7 +113,7 @@ export const githubProvider: ProviderPlugin = {
     ],
     ui: {
       component: 'github-panel',
-      surfaces: ['provider.panel', 'add.option.panel']
+      surfaces: ['provider.panel', 'add.option.panel', 'project.node.create']
     },
     addOptions: [
       {
@@ -150,6 +150,62 @@ export const githubProvider: ProviderPlugin = {
         description: 'Add a GitHub Pages site as ingress/hosting surface.',
         type: 'hosting.pages',
         capability: 'pages.sites.add'
+      }
+    ],
+    nodeOptions: [
+      {
+        id: 'github-repository-folder-node',
+        label: 'Repository folder',
+        description: 'Create a project node from a GitHub repository and a folder inside it.',
+        type: 'source.repo.folder',
+        capability: 'sources.repo-folders.add',
+        nodeKind: 'repo',
+        defaultProvider: providerId,
+        defaultPlatform: 'repository-folder',
+        tags: ['source', 'github', 'repo-folder'],
+        ui: {
+          component: 'github-project-node-create'
+        },
+        configSchema: {
+          repository: {
+            type: 'select',
+            title: 'Repository'
+          },
+          folder: {
+            type: 'string',
+            title: 'Folder',
+            placeholder: 'apps/api'
+          },
+          branch: {
+            type: 'select',
+            title: 'Branch'
+          }
+        }
+      },
+      {
+        id: 'github-pages-site-node',
+        label: 'GitHub Pages site',
+        description: 'Create a hosting/domain node for a GitHub Pages surface.',
+        type: 'hosting.pages',
+        capability: 'pages.sites.add',
+        nodeKind: 'domain',
+        defaultProvider: providerId,
+        defaultPlatform: 'github-pages',
+        tags: ['hosting', 'github-pages'],
+        ui: {
+          component: 'github-project-node-create'
+        },
+        configSchema: {
+          repository: {
+            type: 'select',
+            title: 'Repository'
+          },
+          pagesUrl: {
+            type: 'string',
+            title: 'Pages URL',
+            placeholder: 'https://owner.github.io/repo'
+          }
+        }
       }
     ],
     configSchema: {

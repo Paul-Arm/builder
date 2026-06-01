@@ -7,6 +7,8 @@ import {
   WaypointsIcon
 } from '@lucide/vue'
 import type { Component } from 'vue'
+import GitHubMarkIcon from '~/components/icons/GitHubMarkIcon.vue'
+import ProviderProjectNodeCreateHost from '~/components/provider-ui/ProviderProjectNodeCreateHost.vue'
 import type { EntityKind, InventoryEntity } from '~~/types/inventory'
 import type {
   CreateProjectEnvironmentRequest,
@@ -15,6 +17,10 @@ import type {
   ProjectWorkspace,
   UpdateProjectRequest
 } from '~~/types/projects'
+import type {
+  ProviderNodeCreateOption,
+  ProviderRuntimeSnapshot
+} from '~~/types/providers'
 
 const {
   data: workspace,
@@ -25,13 +31,24 @@ const {
   lazy: true,
   server: false
 })
+const {
+  data: providerRuntime,
+  pending: providersPending,
+  refresh: refreshProviderRuntime
+} = useFetch<ProviderRuntimeSnapshot>('/api/providers/runtime', {
+  lazy: true,
+  server: false
+})
 
 const selectedProjectId = useState<string>('builder:selected-project-id', () => '')
 const savingProject = ref(false)
 const creatingProject = ref(false)
 const creatingEnvironment = ref(false)
 const creatingNode = ref(false)
+const creatingProviderNode = ref(false)
 const message = ref('')
+const selectedProviderId = ref('')
+const selectedProviderNodeOptionId = ref('')
 
 const projectDraft = reactive({
   name: '',
@@ -83,8 +100,42 @@ const environmentOptions = computed(() => {
   }))
 })
 const loading = computed(() => pending.value || (!workspace.value && !error.value))
+const providers = computed(() => providerRuntime.value?.providers || [])
+const providerObservations = computed(() => providerRuntime.value?.observations || [])
+const providersWithNodeOptions = computed(() => {
+  return providers.value.filter((provider) => provider.nodeOptions?.length)
+})
+const selectedProvider = computed(() => {
+  return providersWithNodeOptions.value.find((provider) => provider.id === selectedProviderId.value)
+    || providersWithNodeOptions.value[0]
+})
+const selectedProviderNodeOptions = computed(() => selectedProvider.value?.nodeOptions || [])
+const selectedProviderNodeOption = computed(() => {
+  return selectedProviderNodeOptions.value.find((option) => option.id === selectedProviderNodeOptionId.value)
+    || selectedProviderNodeOptions.value[0]
+})
+const providerOptionItems = computed(() => {
+  return selectedProviderNodeOptions.value.map((option) => ({
+    label: option.label,
+    value: option.id
+  }))
+})
+const providerItems = computed(() => {
+  return providersWithNodeOptions.value.map((provider) => ({
+    label: provider.displayName,
+    value: provider.id
+  }))
+})
+const selectedProviderObservations = computed(() => {
+  return selectedProvider.value
+    ? providerObservations.value.filter((observation) => observation.providerId === selectedProvider.value?.id)
+    : []
+})
 const nodeKindOptions = computed(() => [
   { label: 'Service', value: 'service' },
+  { label: 'Function', value: 'function' },
+  { label: 'External Service', value: 'external_service' },
+  { label: 'Database Server', value: 'database_server' },
   { label: 'Database', value: 'database' },
   { label: 'Storage', value: 'storage' },
   { label: 'Queue', value: 'queue' },
@@ -94,6 +145,7 @@ const nodeKindOptions = computed(() => [
   { label: 'Runtime', value: 'runtime' },
   { label: 'Host', value: 'host' },
   { label: 'Cluster', value: 'cluster' },
+  { label: 'Namespace', value: 'namespace' },
   { label: 'Secret Store', value: 'secret_store' }
 ])
 const healthOptions = computed(() => [
@@ -111,6 +163,30 @@ watch(projects, (nextProjects) => {
 
   if (!selectedProjectId.value || !nextProjects.some((project) => project.id === selectedProjectId.value)) {
     selectedProjectId.value = nextProjects[0]?.id || ''
+  }
+}, { immediate: true })
+
+watch(providersWithNodeOptions, (nextProviders) => {
+  if (!nextProviders.length) {
+    selectedProviderId.value = ''
+    selectedProviderNodeOptionId.value = ''
+    return
+  }
+
+  if (!selectedProviderId.value || !nextProviders.some((provider) => provider.id === selectedProviderId.value)) {
+    selectedProviderId.value = nextProviders[0]?.id || ''
+  }
+}, { immediate: true })
+
+watch(selectedProvider, (provider) => {
+  const options = provider?.nodeOptions || []
+  if (!options.length) {
+    selectedProviderNodeOptionId.value = ''
+    return
+  }
+
+  if (!selectedProviderNodeOptionId.value || !options.some((option) => option.id === selectedProviderNodeOptionId.value)) {
+    selectedProviderNodeOptionId.value = options[0]?.id || ''
   }
 }, { immediate: true })
 
@@ -265,6 +341,34 @@ async function createNodeFromForm() {
   }
 }
 
+async function createProviderNodeFromPayload(request: CreateProjectNodeRequest) {
+  if (!selectedProject.value) {
+    return
+  }
+
+  message.value = ''
+  creatingProviderNode.value = true
+
+  try {
+    workspace.value = await $fetch<ProjectWorkspace>(`/api/projects/${encodeURIComponent(selectedProject.value.id)}/nodes`, {
+      method: 'POST',
+      body: request
+    })
+    message.value = `${request.name} created`
+    await refreshProviderRuntime()
+  } finally {
+    creatingProviderNode.value = false
+  }
+}
+
+function optionDescription(option?: ProviderNodeCreateOption) {
+  return option ? `${option.type} / ${option.nodeKind}` : 'Provider node'
+}
+
+async function refreshAll() {
+  await Promise.all([refresh(), refreshProviderRuntime()])
+}
+
 function splitTags(value: string) {
   return value.split(',').map((tag) => tag.trim()).filter(Boolean)
 }
@@ -273,16 +377,26 @@ function normalizeEnvironmentInput(value: string) {
   return value.trim().replace(/\s+/g, '-').toLowerCase()
 }
 
+function iconForNode(node: InventoryEntity): Component {
+  return isGitHubNode(node) ? GitHubMarkIcon : iconForKind(node.kind)
+}
+
+function isGitHubNode(node: InventoryEntity) {
+  return node.provider === 'github'
+    || node.platform.includes('github')
+    || Boolean(node.externalId?.startsWith('github:'))
+}
+
 function iconForKind(kind: EntityKind): Component {
   if (kind === 'project') {
     return FolderKanbanIcon
   }
 
-  if (['database', 'storage', 'queue', 'secret_store'].includes(kind)) {
+  if (['database_server', 'database', 'storage', 'queue', 'secret_store'].includes(kind)) {
     return DatabaseIcon
   }
 
-  if (['host', 'runtime', 'container', 'cluster'].includes(kind)) {
+  if (['host', 'runtime', 'container', 'cluster', 'namespace', 'function', 'external_service'].includes(kind)) {
     return ServerIcon
   }
 
@@ -311,7 +425,7 @@ function iconForKind(kind: EntityKind): Component {
             color="neutral"
             variant="outline"
             title="Refresh projects"
-            @click="refresh()"
+            @click="refreshAll()"
           />
         </div>
       </header>
@@ -446,8 +560,9 @@ function iconForKind(kind: EntityKind): Component {
                 v-for="node in projectNodes"
                 :key="node.id"
                 class="project-node-card"
+                :class="{ 'github-node-card': isGitHubNode(node) }"
               >
-                <component :is="iconForKind(node.kind)" :size="18" />
+                <component :is="iconForNode(node)" :size="18" />
                 <div>
                   <strong>{{ node.name }}</strong>
                   <span>{{ node.kind }} / {{ node.platform }}</span>
@@ -456,9 +571,55 @@ function iconForKind(kind: EntityKind): Component {
               </article>
             </div>
 
+            <section class="provider-node-create-panel">
+              <div class="panel-heading">
+                <h2>Add from plugin</h2>
+                <span>{{ providersWithNodeOptions.length }}</span>
+              </div>
+
+              <div v-if="providersWithNodeOptions.length" class="provider-node-create-picker">
+                <USelect
+                  v-model="selectedProviderId"
+                  :items="providerItems"
+                  value-key="value"
+                  label-key="label"
+                  size="sm"
+                  :loading="providersPending"
+                />
+                <USelect
+                  v-model="selectedProviderNodeOptionId"
+                  :items="providerOptionItems"
+                  value-key="value"
+                  label-key="label"
+                  size="sm"
+                  :disabled="!selectedProviderNodeOptions.length"
+                />
+              </div>
+
+              <div v-if="selectedProviderNodeOption" class="provider-node-create-option-line">
+                <span>{{ selectedProvider?.displayName }}</span>
+                <small>{{ optionDescription(selectedProviderNodeOption) }}</small>
+              </div>
+
+              <ProviderProjectNodeCreateHost
+                v-if="selectedProvider && selectedProviderNodeOption"
+                :provider="selectedProvider"
+                :option="selectedProviderNodeOption"
+                :observations="selectedProviderObservations"
+                :project="selectedProject"
+                :environments="projectEnvironments"
+                :creating="creatingProviderNode"
+                @create="createProviderNodeFromPayload"
+              />
+
+              <p v-else class="muted">
+                Keine Provider-Node-Optionen geladen.
+              </p>
+            </section>
+
             <form class="project-node-form" @submit.prevent="createNodeFromForm">
               <div class="panel-heading">
-                <h2>New node</h2>
+                <h2>Manual node</h2>
               </div>
               <div class="project-form-row">
                 <USelect

@@ -58,7 +58,7 @@ Nodes:
   database:testing-1
 Relations:
   database_server:pg-1 contains database:testing-1
-  database:testing-1 managed_by database_server:pg-1
+  database_server:pg-1 managed_by database:testing-1
   service:api uses database:testing-1
 ```
 
@@ -176,8 +176,63 @@ Beispiele:
 - Kubernetes: `inventory.provider`, `deployment.provider`, optional `observability.provider`
 - Grafana Stack: `observability.provider`
 - GitHub: `inventory.provider`, spaeter `deployment.provider` fuer Actions/Workflows
-- Terraform: `inventory.provider`, spaeter `deployment.provider` fuer Plan/Apply
+- OpenTofu/Terraform-compatible IaC: Backbone fuer Desired State, Plan und Resource-Normalisierung
 - Bash: Escape-Hatch fuer lokale Spezialfaelle
+
+## OpenTofu Backbone
+
+OpenTofu ist keine normale Provider-Integration. Es sitzt eine Ebene unter vielen Providern als IaC-Backbone:
+
+```txt
+OpenTofu state/plan/config -> IaC Backbone -> Normalized Graph -> Provider Runtime Actions
+```
+
+Diese Schicht beantwortet:
+
+- Welche Ressourcen sollen existieren?
+- Welche Ressourcen existieren laut State?
+- Welche Aenderungen plant IaC?
+- Welche Cloud-/Dienst-Ressourcen koennen als Builder-Nodes normalisiert werden?
+
+Die Backbone-Schicht erzeugt Nodes und Relations aus OpenTofu-kompatiblem JSON:
+
+```txt
+azurerm_postgresql_flexible_server        -> database_server
+azurerm_postgresql_flexible_server_database -> database
+aws_db_instance                           -> database_server
+github_repository                         -> repo
+azurerm_linux_function_app                -> function
+azurerm_kubernetes_cluster                -> cluster
+kubernetes_namespace                      -> namespace
+aws_s3_bucket / azurerm_storage_account   -> storage
+aws_sqs_queue / google_pubsub_topic       -> queue
+cloudflare_record / route53_record        -> domain
+```
+
+Provider sollen diese Backbone-Daten nutzen duerfen, aber nicht davon abhaengen. Beispiel:
+
+```txt
+OpenTofu erkennt:
+  database_server:orders-prod
+  database:testing-1
+  function:billing-api
+
+Native Provider verifizieren live:
+  postgres connection health
+  azure function runtime status
+  logs/metrics/deployment actions
+```
+
+Damit wird OpenTofu zur gemeinsamen Sprache fuer Provisioning und Desired State, waehrend native Provider weiterhin Live-State, Logs und sichere Actions liefern.
+
+Implementierungsregeln:
+
+- Backbone ist read-only per Default.
+- Bevorzugt werden exportierte JSON-Dateien: `tofu show -json`.
+- CLI-Ausfuehrung gegen Workspaces ist opt-in, weil State JSON sensible Werte enthalten kann.
+- Plan-JSON erzeugt Insights fuer create/update/delete, aber fuehrt nichts aus.
+- Secrets werden nicht aus State in Builder-Secrets uebernommen.
+- Provider-spezifische Werte landen nur als whitelisted, nicht-sensitive Metadata auf Nodes.
 
 ## Manifest
 
@@ -190,6 +245,7 @@ interface ProviderManifest {
   roles: string[]
   capabilities: string[]
   addOptions: ProviderAddOption[]
+  nodeOptions?: ProviderNodeCreateOption[]
   ui?: ProviderUiExtension
   configSchema?: unknown
   secretSchema?: unknown
@@ -204,9 +260,25 @@ interface ProviderAddOption {
   configSchema?: unknown
 }
 
+interface ProviderNodeCreateOption {
+  id: string
+  label: string
+  description: string
+  type: string
+  capability: string
+  nodeKind: Exclude<EntityKind, 'project'>
+  defaultProvider?: string
+  defaultPlatform?: string
+  tags?: string[]
+  ui?: {
+    component: string
+  }
+  configSchema?: unknown
+}
+
 interface ProviderUiExtension {
   component: string
-  surfaces: Array<'provider.panel' | 'add.option.panel'>
+  surfaces: Array<'provider.panel' | 'add.option.panel' | 'project.node.create'>
 }
 ```
 
@@ -258,6 +330,23 @@ docker-cli:
 ```
 
 `addOptions` kommen ebenfalls aus dem Provider. Die UI zeigt dadurch nur das an, was der ausgewaehlte Provider wirklich erzeugen kann, z.B. `Repository`, `Workspace folder`, `Docker context` oder `Compose app`. Der Core muss dafuer keine GitHub-, Local-Folder- oder Docker-spezifischen Optionen kennen.
+
+`nodeOptions` sind der Project-Stack-Teil eines Providers. Sie definieren, welche Nodes ein Plugin auf der Projects-Seite anlegen kann. Der Core kennt nur `nodeKind`, Defaults und Metadaten; provider-spezifische Auswahl wie GitHub-Repository, Repo-Ordner, Branch oder Pages-URL kommt aus einer optionalen Create-UI des Providers.
+
+Beispiel GitHub:
+
+```txt
+github.nodeOptions:
+  Repository folder -> repo
+    UI: repository select + folder + branch
+    Metadata: repository, sourcePath, branch, htmlUrl
+
+  GitHub Pages site -> domain
+    UI: repository select + pagesUrl
+    Metadata: repository, pagesUrl, htmlUrl
+```
+
+Provider ohne eigene Project-Node-UI fallen auf ein generisches Formular zurueck. Docker kann dadurch z.B. `Compose app -> runtime` und `Container -> container` anbieten, Local Folder `Workspace folder -> repo` und `Service folder -> service`.
 
 `ui` ist optional. Der Core rendert nur einen `ProviderExtensionHost`; dieser loest `ui.component` gegen eine registrierte Vue-Komponente auf. Damit kann ein Provider spaeter eigene Panels fuer Setup, Preview, Mapping oder Actions mitbringen. Provider ohne eigene UI fallen auf das generische Manifest-Panel zurueck.
 

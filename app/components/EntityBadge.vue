@@ -7,7 +7,7 @@ defineProps<{
 </script>
 
 <template>
-  <UBadge color="secondary" variant="soft" size="sm" class="capitalize">
+  <UBadge color="secondary" variant="soft" size="sm" class="entity-badge capitalize">
     {{ kind.replace('_', ' ') }}
   </UBadge>
 </template>

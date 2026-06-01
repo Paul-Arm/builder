@@ -62,6 +62,30 @@ export const localFolderProvider: ProviderPlugin = {
         }
       }
     ],
+    nodeOptions: [
+      {
+        id: 'local-workspace-folder-node',
+        label: 'Workspace folder',
+        description: 'Create a source folder node from the configured local workspace.',
+        type: 'source.folder',
+        capability: 'sources.folders.add',
+        nodeKind: 'repo',
+        defaultProvider: providerId,
+        defaultPlatform: 'local-folder',
+        tags: ['source', 'local-folder']
+      },
+      {
+        id: 'local-service-folder-node',
+        label: 'Service folder',
+        description: 'Create a service node mapped to a local folder path.',
+        type: 'workspace.local',
+        capability: 'sources.service-folders.add',
+        nodeKind: 'service',
+        defaultProvider: providerId,
+        defaultPlatform: 'local-folder',
+        tags: ['service', 'local-folder']
+      }
+    ],
     configSchema: {
       root: {
         type: 'string',

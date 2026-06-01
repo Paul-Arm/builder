@@ -154,11 +154,15 @@ const kindIcons: Partial<Record<EntityKind, Component>> = {
   host: ServerIcon,
   runtime: CpuIcon,
   container: CpuIcon,
+  function: CloudIcon,
   database: DatabaseIcon,
+  database_server: DatabaseIcon,
   storage: CloudIcon,
   queue: ActivityIcon,
   secret_store: LockIcon,
-  repo: GitBranchIcon
+  repo: GitBranchIcon,
+  namespace: CloudIcon,
+  external_service: CloudIcon
 }
 
 const serviceProjects = computed(() => {
@@ -178,7 +182,7 @@ const serviceProjects = computed(() => {
 })
 
 const selectedProjectUsage = computed(() => {
-  if (!selectedEntity.value || !['database', 'storage', 'queue', 'secret_store'].includes(selectedEntity.value.kind)) {
+  if (!selectedEntity.value || !['database_server', 'database', 'storage', 'queue', 'secret_store', 'external_service'].includes(selectedEntity.value.kind)) {
     return []
   }
 

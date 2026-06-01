@@ -2,7 +2,7 @@
 
 Builder is a Nuxt + SurrealDB starter for an environment graph and deployment control plane across projects, cloud resources, and local hardware.
 
-The first screen models projects, services, deployments, local Mac mini hosts, Docker/OrbStack runtimes, Bash collectors, Terraform resources, Kubernetes targets, shared resources, and the relations between them.
+The first screen models projects, services, deployments, local Mac mini hosts, Docker/OrbStack runtimes, Bash collectors, OpenTofu/IaC resources, Kubernetes targets, shared resources, and the relations between them.
 
 ## Stack
 
@@ -10,8 +10,9 @@ The first screen models projects, services, deployments, local Mac mini hosts, D
 - Nitro server routes for the backend API
 - SurrealDB adapter behind `/api/inventory`
 - Seed inventory fallback when no database is configured
-- Provider plugin model for inventory, deployment lifecycle actions, and later observability
+- Provider plugin model for inventory, project node creation, deployment lifecycle actions, and later observability
 
+https://search.opentofu.org/
 ## Run
 
 ```bash
@@ -47,6 +48,35 @@ The initial schema lives in `surreal/schema.surql`. Base inventory is inserted i
 Manual project edits are stored in `project_overlay`, and UI-saved provider secrets are stored in `provider_secret`. If SurrealDB is unreachable, the app falls back to seed data plus the local `.data` files.
 
 Use a stable `uid` field for graph identities, for example `project:checkout` or `host:mac-mini-01`. The API maps `uid` to the frontend `id` and falls back to the SurrealDB record id when `uid` is missing.
+
+## OpenTofu Backbone
+
+Builder can use OpenTofu-compatible state and plan JSON as an infrastructure backbone across many providers. This layer is read-only by default: it normalizes IaC resources into the same `entity` and `relation` graph as native providers.
+
+Preferred local flow:
+
+```bash
+mkdir -p .data/opentofu
+tofu show -json > .data/opentofu/state.json
+tofu plan -out=.data/opentofu/plan.bin
+tofu show -json .data/opentofu/plan.bin > .data/opentofu/plan.json
+```
+
+Then configure:
+
+```bash
+BUILDER_OPENTOFU_STATE_JSON_PATHS=.data/opentofu/state.json
+BUILDER_OPENTOFU_PLAN_JSON_PATHS=.data/opentofu/plan.json
+```
+
+Workspace CLI execution is available but disabled by default because `tofu show -json` can expose sensitive state values to the process reading it.
+
+```bash
+BUILDER_OPENTOFU_WORKSPACES=/path/to/infra
+BUILDER_OPENTOFU_CLI_ENABLED=true
+```
+
+The backbone status is exposed at `/api/iac/backbone`. Inventory consumers should keep using `/api/inventory`; OpenTofu-normalized nodes and relations are merged there automatically.
 
 ## Codex Environment
 

@@ -224,9 +224,11 @@ export async function createProjectNode(
     health: 'unknown',
     description: optionalString(request.description),
     tags: normalizeTags(request.tags),
+    externalId: optionalString(request.externalId),
     confidence: 1,
     lastSeen: now,
     metadata: {
+      ...normalizeMetadata(request.metadata),
       editable: true,
       projectId
     }
@@ -470,6 +472,22 @@ function normalizeTags(tags?: string[]) {
   return Array.from(new Set((tags || [])
     .map((tag) => tag.trim())
     .filter(Boolean)))
+}
+
+function normalizeMetadata(metadata?: Record<string, string | number | boolean | null>) {
+  const normalized: Record<string, string | number | boolean | null> = {}
+
+  for (const [key, value] of Object.entries(metadata || {})) {
+    if (!key || key === 'editable' || key === 'projectId') {
+      continue
+    }
+
+    if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+      normalized[key] = typeof value === 'string' ? value.slice(0, 500) : value
+    }
+  }
+
+  return normalized
 }
 
 function collectProjectEnvironments(project: InventoryEntity, inventory: InventoryDataset) {

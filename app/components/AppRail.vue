@@ -33,6 +33,13 @@ const navigationItems = computed(() => [
     tooltip: true
   },
   {
+    label: 'IaC',
+    to: '/iac',
+    icon: 'i-lucide-braces',
+    active: isActive('/iac'),
+    tooltip: true
+  },
+  {
     label: 'Targets',
     to: '/targets',
     icon: 'i-lucide-crosshair',

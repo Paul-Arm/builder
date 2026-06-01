@@ -120,19 +120,23 @@ const kindIcons: Partial<Record<GraphKind, Component>> = {
   host: ServerIcon,
   runtime: BoxIcon,
   container: BoxIcon,
+  function: CloudIcon,
   database: DatabaseIcon,
+  database_server: DatabaseIcon,
   storage: HardDriveIcon,
   queue: NetworkIcon,
   repo: GitBranchIcon,
   domain: GlobeIcon,
   cluster: CloudIcon,
+  namespace: CloudIcon,
   secret_store: LockIcon,
+  external_service: CloudIcon,
   ci: NetworkIcon
 }
 
-const stateKinds = new Set<GraphKind>(['database', 'storage', 'secret_store'])
-const edgeKinds = new Set<GraphKind>(['domain', 'queue'])
-const computeKinds = new Set<GraphKind>(['service', 'container', 'runtime', 'cluster', 'host'])
+const stateKinds = new Set<GraphKind>(['database_server', 'database', 'storage', 'secret_store'])
+const edgeKinds = new Set<GraphKind>(['domain', 'queue', 'external_service'])
+const computeKinds = new Set<GraphKind>(['service', 'function', 'container', 'runtime', 'cluster', 'namespace', 'host'])
 const connectionTones: ConnectionTone[] = ['compute', 'state', 'event', 'edge']
 const laneEnvironments = ref<Record<string, string>>({})
 const laneMetrics = ref<Record<string, LaneMetrics>>({})
@@ -380,6 +384,7 @@ function stageColumnsFor(lane: Lane, stageId: GraphStage): StageColumn[] {
         id: 'resource',
         label: 'Resource',
         cards: stateResourceEntitiesFor(lane, environment)
+          .filter((entity) => entity.kind !== 'database_server')
           .map((entity) => entityCard(entity, lane.project.id, {}, environment))
       }
     ]
@@ -480,6 +485,13 @@ function stateBackendCardsFor(lane: Lane, environment: string): DependencyCard[]
 }
 
 function stateBackendCardFor(resource: GraphEntity, projectId: string, environment: string): DependencyCard {
+  if (resource.kind === 'database_server') {
+    return entityCard(resource, projectId, {
+      key: `${projectId}:state-backend:${resource.id}`,
+      variants: []
+    }, environment)
+  }
+
   const managerRelation = graphData.value.relations.find((relation) => {
     return relation.to === resource.id && relation.type === 'managed_by'
   })
@@ -518,6 +530,10 @@ function sourcePathFor(entity: GraphEntity) {
 }
 
 function stateBackendName(entity: GraphEntity) {
+  if (entity.kind === 'database_server') {
+    return `${providerName(entity.provider)} ${databaseServerName(entity.platform)}`
+  }
+
   if (entity.kind === 'database') {
     return `${providerName(entity.provider)} ${databaseServerName(entity.platform)}`
   }
@@ -1270,15 +1286,19 @@ function kindPriority(kind: GraphKind) {
     repo: 0,
     ci: 0,
     service: 0,
+    function: 1,
     container: 1,
     runtime: 2,
     cluster: 3,
-    host: 4,
+    namespace: 4,
+    host: 5,
+    database_server: 0,
     database: 0,
     storage: 1,
     secret_store: 2,
     domain: 0,
-    queue: 1
+    queue: 1,
+    external_service: 2
   }
 
   return priorities[kind] ?? 10

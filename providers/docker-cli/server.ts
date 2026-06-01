@@ -79,6 +79,30 @@ export const dockerCliProvider: ProviderPlugin = {
         }
       }
     ],
+    nodeOptions: [
+      {
+        id: 'docker-compose-app-node',
+        label: 'Compose app',
+        description: 'Create a runtime node for a Docker Compose application.',
+        type: 'deployment.lifecycle',
+        capability: 'deployments.compose.add',
+        nodeKind: 'runtime',
+        defaultProvider: providerId,
+        defaultPlatform: 'docker-compose',
+        tags: ['docker', 'compose']
+      },
+      {
+        id: 'docker-container-node',
+        label: 'Container',
+        description: 'Create a container node for a Docker-managed service.',
+        type: 'runtime.container',
+        capability: 'runtime.containers.add',
+        nodeKind: 'container',
+        defaultProvider: providerId,
+        defaultPlatform: 'docker',
+        tags: ['docker', 'container']
+      }
+    ],
     configSchema: {
       dockerContext: {
         type: 'string',

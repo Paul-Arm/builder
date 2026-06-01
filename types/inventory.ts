@@ -4,13 +4,17 @@ export type EntityKind =
   | 'host'
   | 'runtime'
   | 'container'
+  | 'function'
   | 'database'
+  | 'database_server'
   | 'storage'
   | 'queue'
   | 'repo'
   | 'domain'
   | 'cluster'
+  | 'namespace'
   | 'secret_store'
+  | 'external_service'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unknown' | 'offline'
 export type DeploymentStatus = 'active' | 'rolling' | 'failed' | 'paused'
@@ -77,7 +81,7 @@ export interface DeploymentEvent {
 export interface CollectorRun {
   id: string
   name: string
-  kind: 'docker' | 'orbstack' | 'bash' | 'terraform' | 'kubernetes' | 'git' | 'cloud'
+  kind: 'docker' | 'orbstack' | 'bash' | 'terraform' | 'opentofu' | 'kubernetes' | 'git' | 'cloud' | 'iac'
   target: string
   status: CollectorStatus
   mode: CollectorMode

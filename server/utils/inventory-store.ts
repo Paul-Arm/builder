@@ -9,6 +9,7 @@ import type {
 } from '~~/types/inventory'
 import { createSeedInventory } from './seed-inventory'
 import { applyProjectOverlay } from './project-store'
+import { applyIacBackbone } from './iac-backbone'
 
 interface SurrealConfig {
   url: string
@@ -25,7 +26,7 @@ let databaseUnavailableUntil = 0
 
 export async function readInventory(config: SurrealConfig): Promise<InventoryDataset> {
   if (!config.url || !canUseDatabase()) {
-    return applyProjectOverlay(createSeedInventory())
+    return applyIacBackbone(await applyProjectOverlay(createSeedInventory()))
   }
 
   const db = new Surreal()
@@ -64,7 +65,7 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
 
     await db.close()
 
-    return applyProjectOverlay({
+    return applyIacBackbone(await applyProjectOverlay({
       generatedAt: new Date().toISOString(),
       mode: collectors.some((collector) => collector.mode === 'write_capable') ? 'mixed' : 'read_only',
       source: 'surrealdb',
@@ -73,12 +74,12 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
       deployments: normalizeRows(deployments),
       collectors: normalizeRows(collectors),
       insights: normalizeRows(insights)
-    })
+    }))
   } catch (error) {
     markDatabaseUnavailable()
     await closeQuietly(db)
     console.warn('[inventory-store] Falling back to seed inventory:', error)
-    return applyProjectOverlay(createSeedInventory())
+    return applyIacBackbone(await applyProjectOverlay(createSeedInventory()))
   }
 }
 

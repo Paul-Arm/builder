@@ -1,3 +1,5 @@
+import type { EntityKind } from './inventory'
+
 export type ProviderRole = string
 export type ProviderType = string
 export type ProviderCapability = string
@@ -6,7 +8,7 @@ export type ProviderConnectionStatus = 'connected' | 'degraded' | 'disabled'
 export type DeploymentRuntimeStatus = 'running' | 'stopped' | 'unknown'
 export type DeploymentActionKind = 'start' | 'stop' | 'restart' | 'create'
 export type DeploymentActionRisk = 'low' | 'medium' | 'high'
-export type ProviderUiSurface = 'provider.panel' | 'add.option.panel'
+export type ProviderUiSurface = 'provider.panel' | 'add.option.panel' | 'project.node.create'
 
 export interface ProviderManifest {
   id: string
@@ -17,6 +19,7 @@ export interface ProviderManifest {
   roles: ProviderRole[]
   capabilities: ProviderCapability[]
   addOptions: ProviderAddOption[]
+  nodeOptions?: ProviderNodeCreateOption[]
   ui?: ProviderUiExtension
   configSchema?: Record<string, unknown>
   secretSchema?: Record<string, unknown>
@@ -28,6 +31,22 @@ export interface ProviderAddOption {
   description: string
   type: string
   capability: ProviderCapability
+  configSchema?: Record<string, unknown>
+}
+
+export interface ProviderNodeCreateOption {
+  id: string
+  label: string
+  description: string
+  type: string
+  capability: ProviderCapability
+  nodeKind: Exclude<EntityKind, 'project'>
+  defaultProvider?: string
+  defaultPlatform?: string
+  tags?: string[]
+  ui?: {
+    component: string
+  }
   configSchema?: Record<string, unknown>
 }
 

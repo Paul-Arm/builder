@@ -271,6 +271,25 @@ export function createSeedInventory(): InventoryDataset {
         }
       },
       {
+        id: 'database_server:orders-prod',
+        kind: 'database_server',
+        name: 'orders-prod-rds',
+        provider: 'aws',
+        platform: 'rds-postgres',
+        environment: 'prod',
+        region: 'eu-central-1',
+        account: 'prod-main',
+        owner: 'Payments',
+        health: 'healthy',
+        tags: ['postgres', 'rds', 'iac'],
+        confidence: 0.98,
+        lastSeen: generatedAt,
+        metadata: {
+          iacEngine: 'opentofu',
+          iacResourceType: 'aws_db_instance'
+        }
+      },
+      {
         id: 'database:orders-prod',
         kind: 'database',
         name: 'orders-prod',
@@ -387,11 +406,13 @@ export function createSeedInventory(): InventoryDataset {
       relation('container:postgres-local', 'runtime:orbstack:mac-mini-01', 'runs_on', 'docker'),
       relation('service:checkout-api', 'container:checkout-api-local', 'deployed_as', 'docker'),
       relation('container:postgres-local', 'database:orders-local', 'managed_by', 'docker'),
-      relation('service:checkout-api', 'database:orders-prod', 'uses', 'terraform'),
-      relation('service:portal-web', 'database:orders-prod', 'uses', 'terraform'),
+      relation('database_server:orders-prod', 'database:orders-prod', 'managed_by', 'opentofu'),
+      relation('database_server:orders-prod', 'database:orders-prod', 'contains', 'opentofu'),
+      relation('service:checkout-api', 'database:orders-prod', 'uses', 'opentofu'),
+      relation('service:portal-web', 'database:orders-prod', 'uses', 'opentofu'),
       relation('service:checkout-api', 'database:orders-local', 'uses', 'docker-compose'),
-      relation('service:checkout-api', 'storage:invoice-uploads', 'uses', 'terraform'),
-      relation('service:portal-web', 'storage:invoice-uploads', 'uses', 'terraform'),
+      relation('service:checkout-api', 'storage:invoice-uploads', 'uses', 'opentofu'),
+      relation('service:portal-web', 'storage:invoice-uploads', 'uses', 'opentofu'),
       relation('service:checkout-api', 'queue:billing-events', 'publishes', 'opentelemetry'),
       relation('service:billing-worker', 'queue:billing-events', 'subscribes', 'opentelemetry'),
       relation('service:analytics-ingest', 'queue:billing-events', 'subscribes', 'opentelemetry'),
@@ -557,9 +578,9 @@ export function createSeedInventory(): InventoryDataset {
         summary: 'Plugin contract ready'
       },
       {
-        id: 'collector:terraform:prod',
-        name: 'Terraform State',
-        kind: 'terraform',
+        id: 'collector:opentofu:prod',
+        name: 'OpenTofu State',
+        kind: 'opentofu',
         target: 'prod-main',
         status: 'connected',
         mode: 'write_capable',

@@ -35,6 +35,8 @@ export interface CreateProjectNodeRequest {
   owner?: string
   description?: string
   tags?: string[]
+  externalId?: string
+  metadata?: Record<string, string | number | boolean | null>
 }
 
 export interface CreateProjectEnvironmentRequest {
