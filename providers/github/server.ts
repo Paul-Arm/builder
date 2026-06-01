@@ -183,6 +183,30 @@ export const githubProvider: ProviderPlugin = {
         }
       },
       {
+        id: 'github-actions-workflow-node',
+        label: 'GitHub Actions workflow',
+        description: 'Create a CI/CD pipeline node from a GitHub Actions workflow.',
+        type: 'ci.workflow',
+        capability: 'ci.workflows.add',
+        nodeKind: 'pipeline',
+        defaultProvider: providerId,
+        defaultPlatform: 'github-actions',
+        tags: ['ci', 'cd', 'github-actions'],
+        ui: {
+          component: 'github-project-node-create'
+        },
+        configSchema: {
+          repository: {
+            type: 'select',
+            title: 'Repository'
+          },
+          workflow: {
+            type: 'select',
+            title: 'Workflow'
+          }
+        }
+      },
+      {
         id: 'github-pages-site-node',
         label: 'GitHub Pages site',
         description: 'Create a hosting/domain node for a GitHub Pages surface.',

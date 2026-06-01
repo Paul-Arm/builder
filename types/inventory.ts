@@ -4,6 +4,7 @@ export type EntityKind =
   | 'host'
   | 'runtime'
   | 'container'
+  | 'pipeline'
   | 'function'
   | 'database'
   | 'database_server'

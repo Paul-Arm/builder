@@ -6,6 +6,7 @@ import type { InventoryDataset, InventoryEntity, InventoryRelation } from '~~/ty
 import type {
   CreateProjectEnvironmentRequest,
   CreateProjectNodeRequest,
+  CreateProjectRelationRequest,
   CreateProjectRequest,
   ProjectWorkspace,
   UpdateProjectRequest
@@ -241,6 +242,86 @@ export async function createProjectNode(
   return readProjectWorkspace(base)
 }
 
+export async function createProjectRelation(
+  projectId: string,
+  request: CreateProjectRelationRequest,
+  base: InventoryDataset
+): Promise<ProjectWorkspace> {
+  const from = optionalString(request.from)
+  const to = optionalString(request.to)
+  const type = normalizeRelationType(request.type)
+
+  if (!from || !to || !type) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Relation source, target, and type are required'
+    })
+  }
+
+  if (from === to) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Relation source and target must be different nodes'
+    })
+  }
+
+  const inventory = await applyProjectOverlay(base)
+  assertProjectNodes(projectId, [from, to], inventory)
+
+  const existing = inventory.relations.find((relation) => {
+    return relation.from === from && relation.to === to && relation.type === type
+  })
+  if (existing) {
+    return readProjectWorkspace(base)
+  }
+
+  const store = await readStore()
+  upsertRelation(store, manualRelationFor(from, to, type, optionalString(request.evidence)))
+  await writeStore(store)
+  return readProjectWorkspace(base)
+}
+
+export async function deleteProjectRelation(
+  projectId: string,
+  relationId: string,
+  base: InventoryDataset
+): Promise<ProjectWorkspace> {
+  const inventory = await applyProjectOverlay(base)
+  const relation = inventory.relations.find((item) => item.id === relationId)
+
+  if (!relation) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Relation not found'
+    })
+  }
+
+  if (relation.type === 'owns') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Project ownership relations cannot be deleted here'
+    })
+  }
+
+  assertProjectNodes(projectId, [relation.from, relation.to], inventory)
+
+  const store = await readStore()
+  const index = store.relations.findIndex((item) => item.id === relationId)
+  if (index < 0 || store.relations[index]?.source !== 'manual') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Only manually created project relations can be deleted'
+    })
+  }
+
+  store.relations.splice(index, 1)
+  await writeStore(store)
+  return readProjectWorkspace({
+    ...base,
+    relations: base.relations.filter((item) => item.id !== relationId)
+  })
+}
+
 export async function createProjectEnvironment(
   projectId: string,
   request: CreateProjectEnvironmentRequest,
@@ -428,6 +509,16 @@ function upsertEntity(store: ProjectStoreFile, entity: InventoryEntity) {
   store.entities.push(entity)
 }
 
+function upsertRelation(store: ProjectStoreFile, relation: InventoryRelation) {
+  const index = store.relations.findIndex((item) => item.id === relation.id)
+  if (index >= 0) {
+    store.relations[index] = relation
+    return
+  }
+
+  store.relations.push(relation)
+}
+
 function relationFor(projectId: string, nodeId: string): InventoryRelation {
   return {
     id: `relation:${projectId}:owns:${nodeId}`,
@@ -438,6 +529,64 @@ function relationFor(projectId: string, nodeId: string): InventoryRelation {
     confidence: 1,
     evidence: 'Created from Projects page'
   }
+}
+
+function manualRelationFor(
+  from: string,
+  to: string,
+  type: InventoryRelation['type'],
+  evidence?: string
+): InventoryRelation {
+  return {
+    id: `relation:${from}:${type}:${to}`,
+    from,
+    to,
+    type,
+    source: 'manual',
+    confidence: 1,
+    evidence: evidence || 'Created from Projects page'
+  }
+}
+
+function assertProjectNodes(projectId: string, nodeIds: string[], inventory: InventoryDataset) {
+  const project = inventory.entities.find((entity) => entity.id === projectId && entity.kind === 'project')
+  if (!project) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Project not found'
+    })
+  }
+
+  const ownedNodeIds = new Set(inventory.relations
+    .filter((relation) => relation.from === projectId && relation.type === 'owns')
+    .map((relation) => relation.to))
+
+  for (const nodeId of nodeIds) {
+    if (!ownedNodeIds.has(nodeId)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Relations can only connect nodes that belong to this project'
+      })
+    }
+  }
+}
+
+function normalizeRelationType(type?: InventoryRelation['type']) {
+  const relationTypes: InventoryRelation['type'][] = [
+    'owns',
+    'runs_on',
+    'deployed_as',
+    'deployed_from',
+    'uses',
+    'publishes',
+    'subscribes',
+    'exposed_by',
+    'managed_by',
+    'contains',
+    'secured_by'
+  ]
+
+  return type && relationTypes.includes(type) && type !== 'owns' ? type : undefined
 }
 
 function uniqueEntityId(kind: string, name: string, entities: InventoryEntity[]) {

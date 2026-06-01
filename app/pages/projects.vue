@@ -3,16 +3,18 @@ import {
   BoxesIcon,
   DatabaseIcon,
   FolderKanbanIcon,
+  NetworkIcon,
   ServerIcon,
   WaypointsIcon
 } from '@lucide/vue'
 import type { Component } from 'vue'
 import GitHubMarkIcon from '~/components/icons/GitHubMarkIcon.vue'
 import ProviderProjectNodeCreateHost from '~/components/provider-ui/ProviderProjectNodeCreateHost.vue'
-import type { EntityKind, InventoryEntity } from '~~/types/inventory'
+import type { EntityKind, InventoryEntity, InventoryRelation } from '~~/types/inventory'
 import type {
   CreateProjectEnvironmentRequest,
   CreateProjectNodeRequest,
+  CreateProjectRelationRequest,
   CreateProjectRequest,
   ProjectWorkspace,
   UpdateProjectRequest
@@ -21,6 +23,8 @@ import type {
   ProviderNodeCreateOption,
   ProviderRuntimeSnapshot
 } from '~~/types/providers'
+
+type RelationType = InventoryRelation['type']
 
 const {
   data: workspace,
@@ -46,6 +50,8 @@ const creatingProject = ref(false)
 const creatingEnvironment = ref(false)
 const creatingNode = ref(false)
 const creatingProviderNode = ref(false)
+const creatingRelation = ref(false)
+const deletingRelationId = ref('')
 const message = ref('')
 const selectedProviderId = ref('')
 const selectedProviderNodeOptionId = ref('')
@@ -83,12 +89,124 @@ const newNode = reactive({
   tags: ''
 })
 
+const relationDraft = reactive({
+  from: '',
+  to: '',
+  type: 'uses' as RelationType,
+  evidence: ''
+})
+
+const relationOptions: Array<{
+  value: RelationType
+  label: string
+  description: string
+}> = [
+  {
+    value: 'contains',
+    label: 'contains',
+    description: 'Repo, namespace, server, or group contains another node'
+  },
+  {
+    value: 'runs_on',
+    label: 'runs on',
+    description: 'Service, container, or runtime runs on compute'
+  },
+  {
+    value: 'deployed_as',
+    label: 'deployed as',
+    description: 'Service is deployed as a runtime artifact'
+  },
+  {
+    value: 'deployed_from',
+    label: 'deployed from',
+    description: 'Service is deployed from source'
+  },
+  {
+    value: 'uses',
+    label: 'uses',
+    description: 'Service depends on a resource or external service'
+  },
+  {
+    value: 'publishes',
+    label: 'publishes',
+    description: 'Service publishes events to a queue or topic'
+  },
+  {
+    value: 'subscribes',
+    label: 'subscribes',
+    description: 'Service consumes events from a queue or topic'
+  },
+  {
+    value: 'exposed_by',
+    label: 'exposed by',
+    description: 'Domain or ingress exposes a service'
+  },
+  {
+    value: 'managed_by',
+    label: 'managed by',
+    description: 'Runtime or controller manages a resource'
+  },
+  {
+    value: 'secured_by',
+    label: 'secured by',
+    description: 'Service is secured by a secret store'
+  }
+]
+
 const projects = computed(() => workspace.value?.projects || [])
 const selectedProject = computed(() => {
   return projects.value.find((project) => project.id === selectedProjectId.value) || projects.value[0]
 })
 const projectNodes = computed(() => {
   return selectedProject.value ? workspace.value?.nodesByProject[selectedProject.value.id] || [] : []
+})
+const projectNodeIds = computed(() => new Set(projectNodes.value.map((node) => node.id)))
+const projectNodeById = computed(() => new Map(projectNodes.value.map((node) => [node.id, node])))
+const projectNodeItems = computed(() => {
+  return projectNodes.value.map((node) => ({
+    label: `${node.name} (${node.kind})`,
+    value: node.id
+  }))
+})
+const projectConnectionRelations = computed(() => {
+  const nodeIds = projectNodeIds.value
+  return (workspace.value?.relations || [])
+    .filter((relation) => {
+      return relation.type !== 'owns'
+        && nodeIds.has(relation.from)
+        && nodeIds.has(relation.to)
+    })
+    .sort((a, b) => {
+      return relationNodeName(a.from).localeCompare(relationNodeName(b.from))
+        || relationLabel(a.type).localeCompare(relationLabel(b.type))
+        || relationNodeName(a.to).localeCompare(relationNodeName(b.to))
+    })
+})
+const selectedRelationFrom = computed(() => projectNodeById.value.get(relationDraft.from))
+const selectedRelationTo = computed(() => projectNodeById.value.get(relationDraft.to))
+const recommendedRelationType = computed(() => recommendRelationType(selectedRelationFrom.value, selectedRelationTo.value))
+const relationTypeItems = computed(() => {
+  return relationOptions.map((option) => ({
+    label: option.value === recommendedRelationType.value ? `${option.label} (suggested)` : option.label,
+    value: option.value
+  }))
+})
+const relationAlreadyExists = computed(() => {
+  return Boolean(relationDraft.from && relationDraft.to && relationDraft.type && (workspace.value?.relations || []).some((relation) => {
+    return relation.from === relationDraft.from
+      && relation.to === relationDraft.to
+      && relation.type === relationDraft.type
+  }))
+})
+const canCreateRelation = computed(() => {
+  return Boolean(
+    selectedProject.value
+    && relationDraft.from
+    && relationDraft.to
+    && relationDraft.from !== relationDraft.to
+    && relationDraft.type
+    && !relationAlreadyExists.value
+  )
 })
 const projectEnvironments = computed(() => {
   return selectedProject.value ? workspace.value?.environmentsByProject[selectedProject.value.id] || [] : []
@@ -143,6 +261,7 @@ const nodeKindOptions = computed(() => [
   { label: 'Domain', value: 'domain' },
   { label: 'Container', value: 'container' },
   { label: 'Runtime', value: 'runtime' },
+  { label: 'Pipeline', value: 'pipeline' },
   { label: 'Host', value: 'host' },
   { label: 'Cluster', value: 'cluster' },
   { label: 'Namespace', value: 'namespace' },
@@ -228,6 +347,32 @@ watch(projectEnvironments, (environments) => {
     newNode.environment = environments[0] || ''
   }
 }, { immediate: true })
+
+watch(projectNodes, (nodes) => {
+  if (!nodes.length) {
+    relationDraft.from = ''
+    relationDraft.to = ''
+    return
+  }
+
+  if (!relationDraft.from || !nodes.some((node) => node.id === relationDraft.from)) {
+    relationDraft.from = preferredRelationSource(nodes)?.id || nodes[0]?.id || ''
+  }
+
+  if (!relationDraft.to || relationDraft.to === relationDraft.from || !nodes.some((node) => node.id === relationDraft.to)) {
+    relationDraft.to = preferredRelationTarget(nodes, relationDraft.from)?.id || ''
+  }
+
+  relationDraft.type = recommendedRelationType.value
+}, { immediate: true })
+
+watch(() => [relationDraft.from, relationDraft.to] as const, () => {
+  if (relationDraft.from && relationDraft.to && relationDraft.from === relationDraft.to) {
+    relationDraft.to = preferredRelationTarget(projectNodes.value, relationDraft.from)?.id || ''
+  }
+
+  relationDraft.type = recommendedRelationType.value
+})
 
 function selectProject(project: InventoryEntity) {
   selectedProjectId.value = project.id
@@ -361,6 +506,56 @@ async function createProviderNodeFromPayload(request: CreateProjectNodeRequest) 
   }
 }
 
+async function createRelationFromForm() {
+  if (!selectedProject.value) {
+    return
+  }
+
+  message.value = ''
+  creatingRelation.value = true
+
+  try {
+    workspace.value = await $fetch<ProjectWorkspace>(`/api/projects/${encodeURIComponent(selectedProject.value.id)}/relations`, {
+      method: 'POST',
+      body: {
+        from: relationDraft.from,
+        to: relationDraft.to,
+        type: relationDraft.type,
+        evidence: relationDraft.evidence
+      } satisfies CreateProjectRelationRequest
+    })
+    relationDraft.evidence = ''
+    message.value = 'Connection created'
+  } finally {
+    creatingRelation.value = false
+  }
+}
+
+async function deleteRelation(relation: InventoryRelation) {
+  if (!selectedProject.value) {
+    return
+  }
+
+  message.value = ''
+  deletingRelationId.value = relation.id
+
+  try {
+    workspace.value = await $fetch<ProjectWorkspace>(
+      `/api/projects/${encodeURIComponent(selectedProject.value.id)}/relations/${encodeURIComponent(relation.id)}`,
+      { method: 'DELETE' }
+    )
+    message.value = 'Connection removed'
+  } finally {
+    deletingRelationId.value = ''
+  }
+}
+
+function swapRelationNodes() {
+  const from = relationDraft.from
+  relationDraft.from = relationDraft.to
+  relationDraft.to = from
+}
+
 function optionDescription(option?: ProviderNodeCreateOption) {
   return option ? `${option.type} / ${option.nodeKind}` : 'Provider node'
 }
@@ -375,6 +570,97 @@ function splitTags(value: string) {
 
 function normalizeEnvironmentInput(value: string) {
   return value.trim().replace(/\s+/g, '-').toLowerCase()
+}
+
+function preferredRelationSource(nodes: InventoryEntity[]) {
+  return nodes.find((node) => ['service', 'function', 'repo', 'domain'].includes(node.kind)) || nodes[0]
+}
+
+function preferredRelationTarget(nodes: InventoryEntity[], fromId: string) {
+  return nodes.find((node) => node.id !== fromId && ['database', 'storage', 'queue', 'container', 'runtime'].includes(node.kind))
+    || nodes.find((node) => node.id !== fromId)
+}
+
+function recommendRelationType(from?: InventoryEntity, to?: InventoryEntity): RelationType {
+  if (!from || !to) {
+    return 'uses'
+  }
+
+  const serviceKinds: EntityKind[] = ['service', 'function', 'external_service']
+  const computeKinds: EntityKind[] = ['host', 'runtime', 'container', 'cluster', 'namespace']
+  const resourceKinds: EntityKind[] = ['database', 'database_server', 'storage', 'external_service']
+
+  if (from.kind === 'repo' && ['service', 'function', 'pipeline'].includes(to.kind)) {
+    return 'contains'
+  }
+
+  if (serviceKinds.includes(from.kind) && ['repo', 'pipeline'].includes(to.kind)) {
+    return 'deployed_from'
+  }
+
+  if (from.kind === 'pipeline' && serviceKinds.includes(to.kind)) {
+    return 'deployed_as'
+  }
+
+  if (serviceKinds.includes(from.kind) && ['container', 'function', 'runtime'].includes(to.kind)) {
+    return 'deployed_as'
+  }
+
+  if (['service', 'function', 'container', 'runtime'].includes(from.kind) && computeKinds.includes(to.kind)) {
+    return 'runs_on'
+  }
+
+  if (from.kind === 'domain' && serviceKinds.includes(to.kind)) {
+    return 'exposed_by'
+  }
+
+  if (from.kind === 'database_server' && to.kind === 'database') {
+    return 'contains'
+  }
+
+  if (['container', 'runtime', 'database_server'].includes(from.kind) && ['database', 'storage', 'queue'].includes(to.kind)) {
+    return 'managed_by'
+  }
+
+  if (serviceKinds.includes(from.kind) && to.kind === 'secret_store') {
+    return 'secured_by'
+  }
+
+  if (serviceKinds.includes(from.kind) && to.kind === 'queue') {
+    return 'publishes'
+  }
+
+  if (serviceKinds.includes(from.kind) && resourceKinds.includes(to.kind)) {
+    return 'uses'
+  }
+
+  return 'uses'
+}
+
+function relationLabel(type: RelationType) {
+  return relationOptions.find((option) => option.value === type)?.label || type.replace('_', ' ')
+}
+
+function relationDescription(type: RelationType) {
+  return relationOptions.find((option) => option.value === type)?.description || ''
+}
+
+function relationNode(id: string) {
+  return projectNodeById.value.get(id)
+}
+
+function relationNodeName(id: string) {
+  return relationNode(id)?.name || id
+}
+
+function relationNodeMeta(id: string) {
+  const node = relationNode(id)
+  return node ? `${node.kind} / ${node.platform}` : 'Unknown node'
+}
+
+function iconForRelationNode(id: string): Component {
+  const node = relationNode(id)
+  return node ? iconForNode(node) : BoxesIcon
 }
 
 function iconForNode(node: InventoryEntity): Component {
@@ -394,6 +680,10 @@ function iconForKind(kind: EntityKind): Component {
 
   if (['database_server', 'database', 'storage', 'queue', 'secret_store'].includes(kind)) {
     return DatabaseIcon
+  }
+
+  if (kind === 'pipeline') {
+    return NetworkIcon
   }
 
   if (['host', 'runtime', 'container', 'cluster', 'namespace', 'function', 'external_service'].includes(kind)) {
@@ -570,6 +860,118 @@ function iconForKind(kind: EntityKind): Component {
                 </div>
               </article>
             </div>
+
+            <section class="project-connection-panel">
+              <div class="panel-heading">
+                <h2>Connections</h2>
+                <span>{{ projectConnectionRelations.length }}</span>
+              </div>
+
+              <form class="project-connection-form" @submit.prevent="createRelationFromForm">
+                <div class="project-connection-builder">
+                  <USelect
+                    v-model="relationDraft.from"
+                    :items="projectNodeItems"
+                    value-key="value"
+                    label-key="label"
+                    placeholder="From node"
+                    size="sm"
+                    :disabled="projectNodes.length < 2"
+                  />
+                  <UButton
+                    type="button"
+                    icon="i-lucide-arrow-left-right"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    title="Swap direction"
+                    :disabled="projectNodes.length < 2"
+                    @click="swapRelationNodes"
+                  />
+                  <USelect
+                    v-model="relationDraft.to"
+                    :items="projectNodeItems"
+                    value-key="value"
+                    label-key="label"
+                    placeholder="To node"
+                    size="sm"
+                    :disabled="projectNodes.length < 2"
+                  />
+                </div>
+
+                <div class="project-form-row">
+                  <USelect
+                    v-model="relationDraft.type"
+                    :items="relationTypeItems"
+                    value-key="value"
+                    label-key="label"
+                    placeholder="Relation"
+                    size="sm"
+                    :disabled="projectNodes.length < 2"
+                  />
+                  <UInput
+                    v-model="relationDraft.evidence"
+                    placeholder="Evidence / note"
+                    size="sm"
+                    :disabled="projectNodes.length < 2"
+                  />
+                </div>
+
+                <div v-if="selectedRelationFrom && selectedRelationTo" class="project-relation-preview">
+                  <span>{{ selectedRelationFrom.name }}</span>
+                  <strong>{{ relationLabel(relationDraft.type) }}</strong>
+                  <span>{{ selectedRelationTo.name }}</span>
+                  <small>{{ relationDescription(relationDraft.type) }}</small>
+                </div>
+
+                <UButton
+                  type="submit"
+                  icon="i-lucide-link"
+                  color="primary"
+                  size="sm"
+                  :loading="creatingRelation"
+                  :disabled="!canCreateRelation"
+                >
+                  Create connection
+                </UButton>
+              </form>
+
+              <div v-if="projectConnectionRelations.length" class="project-relation-list">
+                <article
+                  v-for="relation in projectConnectionRelations"
+                  :key="relation.id"
+                  class="project-relation-row"
+                >
+                  <span class="collector-card-icon">
+                    <component :is="iconForRelationNode(relation.from)" :size="18" />
+                  </span>
+                  <div class="project-relation-node">
+                    <strong>{{ relationNodeName(relation.from) }}</strong>
+                    <small>{{ relationNodeMeta(relation.from) }}</small>
+                  </div>
+                  <div class="project-relation-type">
+                    <strong>{{ relationLabel(relation.type) }}</strong>
+                    <small>{{ relation.source }}</small>
+                  </div>
+                  <div class="project-relation-node">
+                    <strong>{{ relationNodeName(relation.to) }}</strong>
+                    <small>{{ relationNodeMeta(relation.to) }}</small>
+                  </div>
+                  <UButton
+                    v-if="relation.source === 'manual'"
+                    type="button"
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="ghost"
+                    size="xs"
+                    title="Remove connection"
+                    :loading="deletingRelationId === relation.id"
+                    @click="deleteRelation(relation)"
+                  />
+                </article>
+              </div>
+              <p v-else class="muted">No node connections yet.</p>
+            </section>
 
             <section class="provider-node-create-panel">
               <div class="panel-heading">

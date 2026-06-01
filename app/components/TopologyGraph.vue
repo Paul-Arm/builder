@@ -120,6 +120,7 @@ const kindIcons: Partial<Record<GraphKind, Component>> = {
   host: ServerIcon,
   runtime: BoxIcon,
   container: BoxIcon,
+  pipeline: NetworkIcon,
   function: CloudIcon,
   database: DatabaseIcon,
   database_server: DatabaseIcon,
@@ -137,6 +138,7 @@ const kindIcons: Partial<Record<GraphKind, Component>> = {
 const stateKinds = new Set<GraphKind>(['database_server', 'database', 'storage', 'secret_store'])
 const edgeKinds = new Set<GraphKind>(['domain', 'queue', 'external_service'])
 const computeKinds = new Set<GraphKind>(['service', 'function', 'container', 'runtime', 'cluster', 'namespace', 'host'])
+const pipelineKinds = new Set<GraphKind>(['pipeline', 'ci'])
 const connectionTones: ConnectionTone[] = ['compute', 'state', 'event', 'edge']
 const laneEnvironments = ref<Record<string, string>>({})
 const laneMetrics = ref<Record<string, LaneMetrics>>({})
@@ -236,6 +238,14 @@ function collectSourceForService(stageIds: Record<GraphStage, Set<string>>, serv
     if (relation.type === 'contains' && relation.to === serviceId) {
       stageIds.source.add(relation.from)
     }
+
+    if (relation.type === 'deployed_as' && relation.to === serviceId) {
+      for (const sourceRelation of graphData.value.relations) {
+        if (sourceRelation.type === 'contains' && sourceRelation.to === relation.from) {
+          stageIds.source.add(sourceRelation.from)
+        }
+      }
+    }
   }
 }
 
@@ -298,7 +308,7 @@ function addByKind(stageIds: Record<GraphStage, Set<string>>, entityId: string) 
     return
   }
 
-  if (entity.kind === 'ci') {
+  if (pipelineKinds.has(entity.kind)) {
     stageIds.ci.add(entity.id)
     return
   }
@@ -749,10 +759,10 @@ function pipelineEntityVisibleFor(entity: GraphEntity, projectId: string, enviro
     return true
   }
 
-  if (entity.kind === 'ci') {
+  if (pipelineKinds.has(entity.kind)) {
     return projectDeploymentsFor(projectId, environment).some((deployment) => {
       return deployment.actor === entity.name && deployment.source === entity.provider
-    })
+    }) || entityMatchesEnvironment(entity, environment)
   }
 
   return entityMatchesEnvironment(entity, environment)
@@ -1045,7 +1055,7 @@ function environmentsFor(entity: GraphEntity) {
 }
 
 function deploymentVariantsFor(entity: GraphEntity, projectId: string, environment = 'all'): DeploymentVariant[] {
-  if (!['service', 'cluster', 'runtime', 'container', 'ci'].includes(entity.kind)) {
+  if (!['service', 'cluster', 'runtime', 'container', 'pipeline', 'ci'].includes(entity.kind)) {
     return []
   }
 
@@ -1059,7 +1069,7 @@ function deploymentVariantsFor(entity: GraphEntity, projectId: string, environme
         return deployment.serviceId === entity.id
       }
 
-      if (entity.kind === 'ci') {
+      if (pipelineKinds.has(entity.kind)) {
         return deployment.actor === entity.name && deployment.source === entity.provider
       }
 
@@ -1284,6 +1294,7 @@ function compareCards(a: DependencyCard, b: DependencyCard) {
 function kindPriority(kind: GraphKind) {
   const priorities: Partial<Record<GraphKind, number>> = {
     repo: 0,
+    pipeline: 0,
     ci: 0,
     service: 0,
     function: 1,

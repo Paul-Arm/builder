@@ -39,6 +39,13 @@ export interface CreateProjectNodeRequest {
   metadata?: Record<string, string | number | boolean | null>
 }
 
+export interface CreateProjectRelationRequest {
+  from: string
+  to: string
+  type: InventoryRelation['type']
+  evidence?: string
+}
+
 export interface CreateProjectEnvironmentRequest {
   name: string
 }

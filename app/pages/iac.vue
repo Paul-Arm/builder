@@ -7,6 +7,7 @@ import {
   FileCode2Icon,
   GitBranchIcon,
   LayersIcon,
+  NetworkIcon,
   ServerIcon
 } from '@lucide/vue'
 import type { Component } from 'vue'
@@ -148,6 +149,10 @@ function iconForResource(resource: IacResourceRef): Component {
   const kind = entityFor(resource)?.kind
   if (kind === 'repo') {
     return GitBranchIcon
+  }
+
+  if (kind === 'pipeline') {
+    return NetworkIcon
   }
 
   if (['database', 'database_server', 'storage', 'queue', 'secret_store'].includes(kind || '')) {

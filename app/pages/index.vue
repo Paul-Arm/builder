@@ -7,6 +7,7 @@ import {
   DatabaseIcon,
   GitBranchIcon,
   LockIcon,
+  NetworkIcon,
   ServerIcon
 } from '@lucide/vue'
 import type { Component } from 'vue'
@@ -154,6 +155,7 @@ const kindIcons: Partial<Record<EntityKind, Component>> = {
   host: ServerIcon,
   runtime: CpuIcon,
   container: CpuIcon,
+  pipeline: NetworkIcon,
   function: CloudIcon,
   database: DatabaseIcon,
   database_server: DatabaseIcon,

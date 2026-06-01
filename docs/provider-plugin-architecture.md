@@ -127,6 +127,7 @@ Empfohlene Node-Arten:
 project
 service
 repo
+pipeline
 host
 runtime
 container
@@ -340,6 +341,10 @@ github.nodeOptions:
   Repository folder -> repo
     UI: repository select + folder + branch
     Metadata: repository, sourcePath, branch, htmlUrl
+
+  GitHub Actions workflow -> pipeline
+    UI: repository select + workflow select or workflow file
+    Metadata: repository, workflowId, workflowName, workflowPath, htmlUrl, badgeUrl
 
   GitHub Pages site -> domain
     UI: repository select + pagesUrl

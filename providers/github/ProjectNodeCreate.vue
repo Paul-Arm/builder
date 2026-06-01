@@ -23,8 +23,10 @@ const emit = defineEmits<{
 
 const selectedRepository = ref('')
 const selectedBranch = ref('')
+const selectedWorkflow = ref('')
 const folder = ref('')
 const pagesUrl = ref('')
+const workflowPath = ref('')
 const nodeName = ref('')
 const environment = ref('')
 const description = ref('')
@@ -38,6 +40,12 @@ const repositories = computed(() => {
 const pageRepositories = computed(() => {
   const withPages = repositories.value.filter((repository) => booleanPayload(repository, 'hasPages'))
   return withPages.length ? withPages : repositories.value
+})
+
+const workflows = computed(() => {
+  return props.observations
+    .filter((observation) => observation.kind === 'workflow')
+    .sort((a, b) => workflowName(a).localeCompare(workflowName(b)))
 })
 
 const repositoryItems = computed(() => {
@@ -70,13 +78,32 @@ const branchItems = computed(() => {
   }))
 })
 
+const workflowItems = computed(() => {
+  return workflows.value
+    .filter((observation) => stringPayload(observation, 'repository') === selectedRepository.value)
+    .map((observation) => ({
+      label: workflowLabel(observation),
+      value: observation.externalId
+    }))
+})
+
 const selectedRepositoryObservation = computed(() => {
   return repositories.value.find((repository) => repositoryName(repository) === selectedRepository.value)
 })
 
+const selectedWorkflowObservation = computed(() => {
+  return workflows.value.find((workflow) => workflow.externalId === selectedWorkflow.value)
+})
+
 const isPagesOption = computed(() => props.option.id.includes('pages'))
+const isWorkflowOption = computed(() => props.option.id.includes('workflow'))
 const canCreate = computed(() => {
-  return Boolean(selectedRepository.value && environment.value && resolvedName.value)
+  return Boolean(
+    selectedRepository.value
+    && environment.value
+    && resolvedName.value
+    && (!isWorkflowOption.value || resolvedWorkflowPath.value)
+  )
 })
 const resolvedName = computed(() => {
   if (nodeName.value.trim()) {
@@ -91,9 +118,20 @@ const resolvedName = computed(() => {
     return pagesUrl.value.trim() || inferredPagesUrl.value || `${selectedRepository.value} pages`
   }
 
+  if (isWorkflowOption.value) {
+    return selectedWorkflowObservation.value
+      ? workflowName(selectedWorkflowObservation.value)
+      : workflowPath.value.trim() || `${selectedRepository.value} workflow`
+  }
+
   return folder.value.trim()
     ? `${selectedRepository.value}:${folder.value.trim()}`
     : selectedRepository.value
+})
+const resolvedWorkflowPath = computed(() => {
+  return selectedWorkflowObservation.value
+    ? stringPayload(selectedWorkflowObservation.value, 'path')
+    : workflowPath.value.trim()
 })
 const inferredPagesUrl = computed(() => {
   if (!selectedRepository.value) {
@@ -111,8 +149,10 @@ const inferredPagesUrl = computed(() => {
 watch(() => props.option.id, () => {
   selectedRepository.value = repositoryItems.value[0]?.value || ''
   selectedBranch.value = ''
+  selectedWorkflow.value = ''
   folder.value = ''
   pagesUrl.value = ''
+  workflowPath.value = ''
   nodeName.value = ''
   environment.value = props.environments[0] || ''
   description.value = props.option.description
@@ -127,6 +167,12 @@ watch(repositoryItems, (items) => {
 watch(branchItems, (items) => {
   if (!items.some((item) => item.value === selectedBranch.value)) {
     selectedBranch.value = items[0]?.value || ''
+  }
+}, { immediate: true })
+
+watch(workflowItems, (items) => {
+  if (!items.some((item) => item.value === selectedWorkflow.value)) {
+    selectedWorkflow.value = items[0]?.value || ''
   }
 }, { immediate: true })
 
@@ -159,6 +205,32 @@ function createNode() {
     return
   }
 
+  if (isWorkflowOption.value) {
+    emit('create', {
+      kind: props.option.nodeKind,
+      name: resolvedName.value,
+      provider: props.option.defaultProvider || props.provider.id,
+      platform: props.option.defaultPlatform || 'github-actions',
+      environment: environment.value,
+      owner: props.project?.owner,
+      description: description.value,
+      tags: ['ci', 'cd', 'github-actions'],
+      externalId: selectedWorkflowObservation.value?.externalId
+        || `github:${selectedRepository.value}:workflow:${resolvedWorkflowPath.value}`,
+      metadata: {
+        providerNodeOptionId: props.option.id,
+        repository: selectedRepository.value,
+        workflowId: numberPayload(selectedWorkflowObservation.value, 'workflowId'),
+        workflowName: selectedWorkflowObservation.value ? workflowName(selectedWorkflowObservation.value) : resolvedName.value,
+        workflowPath: resolvedWorkflowPath.value,
+        state: stringPayload(selectedWorkflowObservation.value, 'state'),
+        htmlUrl: stringPayload(selectedWorkflowObservation.value, 'url'),
+        badgeUrl: stringPayload(selectedWorkflowObservation.value, 'badgeUrl')
+      }
+    })
+    return
+  }
+
   const normalizedFolder = folder.value.trim().replace(/^\/+|\/+$/g, '')
   emit('create', {
     kind: props.option.nodeKind,
@@ -185,9 +257,23 @@ function repositoryName(observation: ProviderObservation) {
   return stringPayload(observation, 'repository') || observation.externalId.replace(/^github:/, '')
 }
 
+function workflowName(observation: ProviderObservation) {
+  return stringPayload(observation, 'name') || stringPayload(observation, 'path') || observation.externalId
+}
+
+function workflowLabel(observation: ProviderObservation) {
+  const path = stringPayload(observation, 'path')
+  return path ? `${workflowName(observation)} (${path})` : workflowName(observation)
+}
+
 function stringPayload(observation: ProviderObservation | undefined, key: string) {
   const value = observation?.payload[key]
   return typeof value === 'string' ? value : ''
+}
+
+function numberPayload(observation: ProviderObservation | undefined, key: string) {
+  const value = observation?.payload[key]
+  return typeof value === 'number' ? value : null
 }
 
 function booleanPayload(observation: ProviderObservation, key: string) {
@@ -210,6 +296,9 @@ function booleanPayload(observation: ProviderObservation, key: string) {
 
     <p v-if="!repositories.length" class="muted">
       Keine GitHub-Repositories geladen. Verbinde GitHub auf der Provider-Seite oder nutze das manuelle Formular.
+    </p>
+    <p v-else-if="isWorkflowOption && !workflowItems.length" class="muted">
+      Keine Workflows fuer dieses Repository geladen. Du kannst die Workflow-Datei manuell eintragen.
     </p>
 
     <div class="project-form-row">
@@ -242,6 +331,26 @@ function booleanPayload(observation: ProviderObservation, key: string) {
       />
     </template>
 
+    <template v-else-if="isWorkflowOption">
+      <div class="project-form-row">
+        <USelect
+          v-model="selectedWorkflow"
+          :items="workflowItems"
+          value-key="value"
+          label-key="label"
+          placeholder="Workflow"
+          size="sm"
+          :disabled="!workflowItems.length"
+        />
+        <UInput
+          v-model="workflowPath"
+          icon="i-lucide-route"
+          placeholder=".github/workflows/deploy.yml"
+          size="sm"
+        />
+      </div>
+    </template>
+
     <template v-else>
       <div class="project-form-row">
         <UInput
@@ -269,6 +378,7 @@ function booleanPayload(observation: ProviderObservation, key: string) {
       <span>{{ selectedRepository || 'No repository' }}</span>
       <strong>{{ resolvedName || 'Node name' }}</strong>
       <small v-if="isPagesOption">{{ pagesUrl || inferredPagesUrl || 'GitHub Pages URL' }}</small>
+      <small v-else-if="isWorkflowOption">{{ resolvedWorkflowPath || 'Workflow file' }}</small>
       <small v-else>{{ folder || '.' }} / {{ selectedBranch || 'default branch' }}</small>
     </div>
 
