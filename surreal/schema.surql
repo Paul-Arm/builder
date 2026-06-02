@@ -5,6 +5,7 @@ DEFINE TABLE IF NOT EXISTS collector SCHEMALESS;
 DEFINE TABLE IF NOT EXISTS insight SCHEMALESS;
 DEFINE TABLE IF NOT EXISTS project_overlay SCHEMALESS;
 DEFINE TABLE IF NOT EXISTS provider_secret SCHEMALESS;
+DEFINE TABLE IF NOT EXISTS observability_settings SCHEMALESS;
 
 DEFINE INDEX IF NOT EXISTS entity_uid ON entity FIELDS uid UNIQUE;
 DEFINE INDEX IF NOT EXISTS entity_kind_name ON entity FIELDS kind, name;
@@ -19,3 +20,4 @@ DEFINE INDEX IF NOT EXISTS collector_target ON collector FIELDS target;
 DEFINE INDEX IF NOT EXISTS insight_uid ON insight FIELDS uid UNIQUE;
 DEFINE INDEX IF NOT EXISTS project_overlay_uid ON project_overlay FIELDS uid UNIQUE;
 DEFINE INDEX IF NOT EXISTS provider_secret_uid ON provider_secret FIELDS uid UNIQUE;
+DEFINE INDEX IF NOT EXISTS observability_settings_uid ON observability_settings FIELDS uid UNIQUE;

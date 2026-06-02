@@ -9,7 +9,7 @@ if (!(Test-Path ".env")) {
 }
 
 npm install
-npm run db:up
+npm run stack:up
 npm run db:wait
 npm run db:schema
 npm run db:seed

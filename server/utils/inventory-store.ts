@@ -10,6 +10,10 @@ import type {
 import { createSeedInventory } from './seed-inventory'
 import { applyProjectOverlay } from './project-store'
 import { applyIacBackbone } from './iac-backbone'
+import {
+  logWarning,
+  recordDbFallback
+} from './observability-telemetry'
 
 interface SurrealConfig {
   url: string
@@ -77,8 +81,12 @@ export async function readInventory(config: SurrealConfig): Promise<InventoryDat
     }))
   } catch (error) {
     markDatabaseUnavailable()
+    recordDbFallback('inventory')
     await closeQuietly(db)
     console.warn('[inventory-store] Falling back to seed inventory:', error)
+    void logWarning('inventory_database_fallback', {
+      error: errorMessage(error)
+    })
     return applyIacBackbone(await applyProjectOverlay(createSeedInventory()))
   }
 }
@@ -145,4 +153,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 function numberFromEnv(key: string, fallback: number) {
   const value = Number(process.env[key])
   return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return String(error)
 }

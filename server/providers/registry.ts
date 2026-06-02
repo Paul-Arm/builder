@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import { createError } from 'h3'
 import type {
   DeploymentActionPlan,
@@ -6,14 +7,19 @@ import type {
   ProviderRuntimeSnapshot
 } from '~~/types/providers'
 import { dockerCliProvider } from '../../providers/docker-cli/server'
+import { grafanaStackProvider } from '../../providers/grafana-stack/server'
 import { githubProvider } from '../../providers/github/server'
 import { localFolderProvider } from '../../providers/local-folder/server'
+import {
+  recordProviderCollection
+} from '../utils/observability-telemetry'
 import type { ProviderCollectResult, ProviderPlugin } from './types'
 
 const providers: ProviderPlugin[] = [
   githubProvider,
   localFolderProvider,
-  dockerCliProvider
+  dockerCliProvider,
+  grafanaStackProvider
 ]
 
 let runtimeCache:
@@ -33,7 +39,27 @@ export async function collectProviderRuntime(): Promise<ProviderRuntimeSnapshot>
   }
 
   const generatedAt = new Date().toISOString()
-  const results = await Promise.all(providers.map((provider) => provider.collectRuntime()))
+  const results = await Promise.all(providers.map(async (provider) => {
+    const startedAt = performance.now()
+    try {
+      const result = await provider.collectRuntime()
+      recordProviderCollection({
+        provider: provider.manifest.id,
+        status: result.collector.status,
+        durationMs: performance.now() - startedAt,
+        observations: result.observations.length
+      })
+      return result
+    } catch (error) {
+      recordProviderCollection({
+        provider: provider.manifest.id,
+        status: 'failed',
+        durationMs: performance.now() - startedAt,
+        observations: 0
+      })
+      throw error
+    }
+  }))
 
   const snapshot = {
     generatedAt,

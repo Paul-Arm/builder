@@ -3,6 +3,10 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createError } from 'h3'
 import { Surreal } from 'surrealdb'
+import {
+  logWarning,
+  recordDbFallback
+} from './observability-telemetry'
 
 type SecretSource = 'database' | 'file' | 'env' | 'missing'
 
@@ -174,8 +178,12 @@ async function readDatabaseSecretRecord(uid: string) {
     return normalizeDatabaseRecord(records?.[0])
   } catch (error) {
     markDatabaseUnavailable()
+    recordDbFallback('secret')
     await closeQuietly(db)
     console.warn('[secret-store] Database read failed, falling back to encrypted file store:', error)
+    void logWarning('secret_database_read_fallback', {
+      error: errorMessage(error)
+    })
     return undefined
   }
 }
@@ -207,8 +215,12 @@ async function writeDatabaseSecretRecord(record: SecretRecord) {
     return true
   } catch (error) {
     markDatabaseUnavailable()
+    recordDbFallback('secret')
     await closeQuietly(db)
     console.warn('[secret-store] Database write failed, falling back to encrypted file store:', error)
+    void logWarning('secret_database_write_fallback', {
+      error: errorMessage(error)
+    })
     return false
   }
 }
@@ -429,4 +441,12 @@ function fingerprintSecret(value: string) {
 function numberFromEnv(key: string, fallback: number) {
   const value = Number(process.env[key])
   return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return String(error)
 }

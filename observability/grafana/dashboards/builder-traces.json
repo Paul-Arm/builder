@@ -1,0 +1,35 @@
+{
+  "uid": "builder-traces",
+  "title": "Builder Traces",
+  "tags": ["builder", "traces", "tempo"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Builder TraceQL search",
+      "datasource": {"type": "tempo", "uid": "tempo"},
+      "targets": [
+        {"refId": "A", "query": "{ resource.service.name = \"builder\" }", "queryType": "traceql"}
+      ],
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "text",
+      "title": "Trace context",
+      "options": {
+        "mode": "markdown",
+        "content": "Use Grafana Explore with the Tempo datasource for detailed spans. The Builder app exports OTLP traces through Alloy into Tempo."
+      },
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 12}
+    }
+  ]
+}

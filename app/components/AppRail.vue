@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { GrafanaState } from '~~/types/observability'
+
 const props = defineProps<{
   mode?: string
   collectorCount?: number
@@ -6,10 +8,14 @@ const props = defineProps<{
 
 const route = useRoute()
 const open = ref(true)
+const { data: grafana } = useFetch<GrafanaState>('/api/observability/grafana', {
+  lazy: true,
+  server: false
+})
 
 const collapsed = computed(() => !open.value)
 
-const navigationItems = computed(() => [
+const mainNavigationItems = computed(() => [
   {
     label: 'Graph',
     to: '/',
@@ -45,8 +51,30 @@ const navigationItems = computed(() => [
     icon: 'i-lucide-crosshair',
     active: isActive('/targets'),
     tooltip: true
+  },
+  {
+    label: 'Grafana',
+    to: '/grafana',
+    icon: 'i-lucide-chart-no-axes-combined',
+    active: isActive('/grafana') && !route.query.slot,
+    tooltip: true
   }
 ])
+
+const grafanaSlotItems = computed(() => {
+  const slots = grafana.value?.slots || []
+  return Array.from({ length: 5 }, (_, index) => {
+    const id = `slot-${index + 1}`
+    const slot = slots.find((item) => item.id === id)
+    return {
+      label: slot?.label || `Dashboard ${index + 1}`,
+      to: `/grafana?slot=${id}`,
+      icon: slot?.icon || 'i-lucide-layout-dashboard',
+      active: route.path === '/grafana' && route.query.slot === id,
+      tooltip: true
+    }
+  })
+})
 
 const sidebarUi = {
   root: '[--sidebar-width:17rem] [--sidebar-width-icon:4.5rem]',
@@ -125,7 +153,7 @@ function isActive(path: string) {
     </template>
 
     <UNavigationMenu
-      :items="navigationItems"
+      :items="mainNavigationItems"
       orientation="vertical"
       :collapsed="collapsed"
       tooltip
@@ -133,6 +161,25 @@ function isActive(path: string) {
       variant="pill"
       :ui="navUi"
     />
+
+    <section class="sidebar-nav-group" :data-state="collapsed ? 'collapsed' : 'expanded'">
+      <UTooltip text="Grafana Dashboards">
+        <div class="sidebar-nav-group-label">
+          <UIcon name="i-lucide-layout-dashboard" />
+          <span v-if="!collapsed">Dashboards</span>
+        </div>
+      </UTooltip>
+
+      <UNavigationMenu
+        :items="grafanaSlotItems"
+        orientation="vertical"
+        :collapsed="collapsed"
+        tooltip
+        color="primary"
+        variant="pill"
+        :ui="navUi"
+      />
+    </section>
 
     <template #footer="{ state }">
       <UTooltip :text="mode === 'mixed' ? 'Mixed inventory mode' : 'Inventory mode'">

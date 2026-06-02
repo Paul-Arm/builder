@@ -1,0 +1,46 @@
+{
+  "uid": "builder-providers-db",
+  "title": "Builder Providers and DB",
+  "tags": ["builder", "providers", "database"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Provider collections",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(builder_provider_collections_total[$__rate_interval])) by (provider, status)"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "DB fallbacks",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(builder_db_fallbacks_total[$__rate_interval])) by (store)"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Provider and DB log lines",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "expr": "{job=\"builder\"} |~ \"provider|database|fallback|grafana\""}
+      ],
+      "options": {"showLabels": true, "showTime": true, "wrapLogMessage": true},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 8}
+    }
+  ]
+}

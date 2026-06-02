@@ -11,6 +11,10 @@ import type {
   ProjectWorkspace,
   UpdateProjectRequest
 } from '~~/types/projects'
+import {
+  logWarning,
+  recordDbFallback
+} from './observability-telemetry'
 
 interface ProjectStoreFile {
   version: 1
@@ -430,8 +434,12 @@ async function readDatabaseStore(): Promise<ProjectStoreFile | undefined> {
     return records?.[0] ? normalizeDatabaseStore(records[0]) : undefined
   } catch (error) {
     markDatabaseUnavailable()
+    recordDbFallback('project')
     await closeQuietly(db)
     console.warn('[project-store] Database read failed, falling back to file store:', error)
+    void logWarning('project_database_read_fallback', {
+      error: errorMessage(error)
+    })
     return undefined
   }
 }
@@ -469,8 +477,12 @@ async function writeDatabaseStore(store: ProjectStoreFile) {
     return true
   } catch (error) {
     markDatabaseUnavailable()
+    recordDbFallback('project')
     await closeQuietly(db)
     console.warn('[project-store] Database write failed, falling back to file store:', error)
+    void logWarning('project_database_write_fallback', {
+      error: errorMessage(error)
+    })
     return false
   }
 }
@@ -745,4 +757,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 function numberFromEnv(key: string, fallback: number) {
   const value = Number(process.env[key])
   return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return String(error)
 }
