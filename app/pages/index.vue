@@ -17,7 +17,7 @@ const { data: inventory, pending, error, refresh } = await useFetch<InventoryDat
 
 const query = ref('')
 const selectedProjectId = useState<string>('builder:selected-project-id', () => '')
-const selectedEntityId = ref('project:checkout')
+const selectedEntityId = ref('project:builder')
 
 const entities = computed(() => inventory.value?.entities || [])
 const relations = computed(() => inventory.value?.relations || [])
@@ -61,8 +61,8 @@ watch(allProjects, (nextProjects) => {
     return
   }
 
-  selectedProjectId.value = nextProjects.some((project) => project.id === 'project:checkout')
-    ? 'project:checkout'
+  selectedProjectId.value = nextProjects.some((project) => project.id === 'project:builder')
+    ? 'project:builder'
     : nextProjects[0]?.id || ''
 }, { immediate: true })
 

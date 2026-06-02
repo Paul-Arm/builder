@@ -442,40 +442,16 @@ function entityCard(
 }
 
 function sourceComponentCardsFor(lane: Lane, environment: string): DependencyCard[] {
-  const repoIds = new Set(sourceRepoEntitiesFor(lane, environment).map((entity) => entity.id))
   const serviceIds = serviceIdsFor(lane, environment)
   const cards = new Map<string, DependencyCard>()
 
-  for (const card of graphData.value.relations
-    .filter((relation) => relation.type === 'contains' && repoIds.has(relation.from) && serviceIds.has(relation.to))
-    .map((relation) => {
-      const service = entityById.value.get(relation.to)
-      const repo = entityById.value.get(relation.from)
-      if (!service || !repo) {
-        return undefined
-      }
-
-      return entityCard(service, lane.project.id, {
-        key: `${lane.project.id}:source-component:${relation.from}:${service.id}`,
-        id: `source-component:${relation.from}:${service.id}`,
-        name: nodeName(repo),
-        platform: `${sourcePathFor(service)} / ${service.name}`,
-        chips: environmentChipsFor(service, environment),
-        variants: []
-      }, environment)
-    })
-    .filter((card): card is DependencyCard => Boolean(card))) {
-    cards.set(card.key, card)
-  }
-
   for (const entity of sourceRepoEntitiesFor(lane, environment)) {
-    const hasComponent = graphData.value.relations.some((relation) => {
-      return relation.type === 'contains' && relation.from === entity.id && serviceIds.has(relation.to)
-    })
-    if (!hasComponent) {
-      const card = entityCard(entity, lane.project.id, {}, environment)
-      cards.set(card.key, card)
-    }
+    const containedServices = containedServicesForSource(entity.id, serviceIds)
+    const card = entityCard(entity, lane.project.id, {
+      platform: sourceSummaryFor(entity, containedServices),
+      variants: []
+    }, environment)
+    cards.set(card.key, card)
   }
 
   return [...cards.values()].sort(compareCards)
@@ -537,6 +513,29 @@ function stateBackendCardFor(resource: GraphEntity, projectId: string, environme
 function sourcePathFor(entity: GraphEntity) {
   const sourcePath = entity.metadata?.sourcePath
   return typeof sourcePath === 'string' ? sourcePath : entity.platform
+}
+
+function containedServicesForSource(sourceId: string, serviceIds: Set<string>) {
+  return graphData.value.relations
+    .filter((relation) => relation.type === 'contains' && relation.from === sourceId && serviceIds.has(relation.to))
+    .map((relation) => entityById.value.get(relation.to))
+    .filter((entity): entity is GraphEntity => entity !== undefined && entity.kind === 'service')
+    .sort(compareEntities)
+}
+
+function sourceSummaryFor(source: GraphEntity, services: GraphEntity[]) {
+  if (!services.length) {
+    return source.platform
+  }
+
+  const paths = Array.from(new Set(services.map(sourcePathFor).filter(Boolean)))
+  const serviceNames = services.map((service) => service.name)
+  const pathSummary = paths.length > 3 ? `${paths.slice(0, 3).join(', ')} +${paths.length - 3}` : paths.join(', ')
+  const serviceSummary = serviceNames.length > 3
+    ? `${serviceNames.slice(0, 3).join(', ')} +${serviceNames.length - 3}`
+    : serviceNames.join(', ')
+
+  return [pathSummary, serviceSummary].filter(Boolean).join(' / ')
 }
 
 function stateBackendName(entity: GraphEntity) {

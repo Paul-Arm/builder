@@ -1,644 +1,516 @@
 import type { InventoryDataset } from '~~/types/inventory'
 
+type Entity = InventoryDataset['entities'][number]
+type Relation = InventoryDataset['relations'][number]
+type Deployment = InventoryDataset['deployments'][number]
+type Collector = InventoryDataset['collectors'][number]
+type Insight = InventoryDataset['insights'][number]
+
 export function createSeedInventory(): InventoryDataset {
   const generatedAt = new Date().toISOString()
+  const base = {
+    confidence: 1,
+    lastSeen: generatedAt
+  }
+
+  const entities: Entity[] = [
+    {
+      ...base,
+      id: 'project:builder',
+      kind: 'project',
+      name: 'Builder',
+      provider: 'builder',
+      platform: 'control-plane',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'This Builder app: Nuxt UI, Nitro API, provider runtime, local Docker/Portainer management, SurrealDB inventory, and Grafana observability.',
+      tags: ['self', 'platform', 'inventory', 'docker-management'],
+      metadata: {
+        editable: true,
+        environments: 'local'
+      }
+    },
+    {
+      ...base,
+      id: 'repo:builder-local',
+      kind: 'repo',
+      name: 'C:\\Users\\paulp\\Documents\\builder',
+      provider: 'local-folder',
+      platform: 'workspace',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Local Builder workspace folder used by Codex and npm scripts.',
+      tags: ['source', 'local-folder', 'workspace'],
+      externalId: 'file:C:\\Users\\paulp\\Documents\\builder',
+      metadata: {
+        default_branch: 'master',
+        branches: 'master',
+        remote: 'github.com/Paul-Arm/builder',
+        htmlUrl: 'https://github.com/Paul-Arm/builder',
+        paths: 'app,server,providers,types,scripts,surreal,observability'
+      }
+    },
+    {
+      ...base,
+      id: 'pipeline:builder-local-setup',
+      kind: 'pipeline',
+      name: 'Builder local setup',
+      provider: 'npm',
+      platform: 'powershell-node',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Versioned setup flow: scripts/setup.ps1, Docker Compose stack, database seed, and typecheck.',
+      tags: ['setup', 'typecheck', 'docker-compose'],
+      metadata: {
+        setup: 'scripts/setup.ps1',
+        dev: 'npm run dev',
+        stack: 'npm run stack:up'
+      }
+    },
+    {
+      ...base,
+      id: 'service:builder-web',
+      kind: 'service',
+      name: 'Builder web app',
+      provider: 'builder',
+      platform: 'nuxt',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Nuxt 4 app shell and Vue UI for graph, projects, providers, targets, IaC, and Grafana.',
+      tags: ['nuxt', 'vue', 'ui'],
+      metadata: {
+        sourcePath: 'app',
+        localUrl: 'http://127.0.0.1:3000'
+      }
+    },
+    {
+      ...base,
+      id: 'service:builder-api',
+      kind: 'service',
+      name: 'Builder Nitro API',
+      provider: 'builder',
+      platform: 'nitro',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Nitro server routes for inventory, projects, providers, observability, and IaC state.',
+      tags: ['nitro', 'api', 'inventory'],
+      metadata: {
+        sourcePath: 'server'
+      }
+    },
+    {
+      ...base,
+      id: 'service:builder-provider-runtime',
+      kind: 'service',
+      name: 'Provider runtime',
+      provider: 'builder',
+      platform: 'plugin-runtime',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Provider registry and plugins for GitHub, local folders, Docker CLI, Portainer, and Grafana Stack.',
+      tags: ['providers', 'plugins', 'actions'],
+      metadata: {
+        sourcePath: 'providers,server/providers'
+      }
+    },
+    {
+      ...base,
+      id: 'service:builder-database',
+      kind: 'service',
+      name: 'Builder database',
+      provider: 'surrealdb',
+      platform: 'surrealdb',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Local SurrealDB service for normalized inventory, project overlay, observability settings, and provider secrets.',
+      tags: ['database', 'surrealdb', 'stateful']
+    },
+    {
+      ...base,
+      id: 'service:builder-observability',
+      kind: 'service',
+      name: 'Builder observability',
+      provider: 'grafana-stack',
+      platform: 'grafana-loki-tempo-prometheus-alloy',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Local Grafana, Loki, Tempo, Prometheus, and Alloy stack for Builder logs, traces, metrics, and Docker logs.',
+      tags: ['grafana', 'logs', 'metrics', 'traces']
+    },
+    {
+      ...base,
+      id: 'service:builder-docker-manager',
+      kind: 'service',
+      name: 'Docker manager',
+      provider: 'portainer',
+      platform: 'portainer-ce',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Portainer CE management surface for local Docker/OrbStack containers, volumes, networks, images, and stacks.',
+      tags: ['portainer', 'docker', 'management'],
+      metadata: {
+        localUrl: 'http://localhost:9000'
+      }
+    },
+    {
+      ...base,
+      id: 'host:local-workstation',
+      kind: 'host',
+      name: 'Local Windows workstation',
+      provider: 'local',
+      platform: 'windows',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Current development host running Codex, Nuxt dev server, Docker Desktop/OrbStack-compatible contexts, and the Builder workspace.',
+      tags: ['local', 'windows', 'development']
+    },
+    {
+      ...base,
+      id: 'runtime:builder-nuxt-dev',
+      kind: 'runtime',
+      name: 'Nuxt dev server',
+      provider: 'node',
+      platform: 'nuxt-dev',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Local npm run dev process serving Builder on port 3000.',
+      tags: ['node', 'nuxt', 'dev-server'],
+      metadata: {
+        command: 'npm run dev',
+        port: 3000
+      }
+    },
+    {
+      ...base,
+      id: 'runtime:builder-docker',
+      kind: 'runtime',
+      name: 'Local Docker runtime',
+      provider: 'docker-cli',
+      platform: 'docker-compatible',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Docker-compatible runtime used by Builder Compose services and Portainer.',
+      tags: ['docker', 'orbstack-compatible', 'compose']
+    },
+    container('builder-surrealdb', 'surrealdb/surrealdb:v2', '8000'),
+    container('builder-portainer', 'portainer/portainer-ce:2.39.1', '9000,9443'),
+    container('builder-grafana', 'grafana/grafana-oss:latest', '3300'),
+    container('builder-loki', 'grafana/loki:latest', '3100'),
+    container('builder-tempo', 'grafana/tempo:latest', '3200'),
+    container('builder-prometheus', 'prom/prometheus:latest', '9090'),
+    container('builder-alloy', 'grafana/alloy:latest', '12345,4317,4318'),
+    {
+      ...base,
+      id: 'database:builder-surrealdb',
+      kind: 'database',
+      name: 'builder.inventory',
+      provider: 'surrealdb',
+      platform: 'surrealdb',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'SurrealDB namespace/database used by Builder for inventory and provider state.',
+      tags: ['surrealdb', 'inventory'],
+      metadata: {
+        namespace: 'builder',
+        database: 'inventory',
+        url: 'http://127.0.0.1:8000'
+      }
+    },
+    {
+      ...base,
+      id: 'secret_store:builder-provider-secrets',
+      kind: 'secret_store',
+      name: 'Builder provider secrets',
+      provider: 'builder',
+      platform: 'surrealdb-or-local-file',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Encrypted provider secret store for GitHub and Grafana tokens.',
+      tags: ['secrets', 'providers', 'encrypted'],
+      metadata: {
+        fallbackPath: '.data/secrets.enc.json'
+      }
+    },
+    {
+      ...base,
+      id: 'storage:builder-docker-volumes',
+      kind: 'storage',
+      name: 'Builder Docker volumes',
+      provider: 'docker',
+      platform: 'named-volumes',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Docker named volumes for SurrealDB, Portainer, Grafana, Loki, Tempo, Prometheus, and Alloy.',
+      tags: ['docker-volume', 'state']
+    },
+    {
+      ...base,
+      id: 'domain:builder-localhost',
+      kind: 'domain',
+      name: '127.0.0.1:3000',
+      provider: 'local',
+      platform: 'http',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Local browser entrypoint for the Builder UI.',
+      tags: ['localhost', 'dev']
+    },
+    {
+      ...base,
+      id: 'external_service:builder-github',
+      kind: 'external_service',
+      name: 'GitHub / Paul-Arm',
+      provider: 'github',
+      platform: 'github-api',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'GitHub provider connection used to discover repositories, branches, workflows, and Pages.',
+      tags: ['github', 'provider-api']
+    },
+    {
+      ...base,
+      id: 'external_service:builder-grafana-ui',
+      kind: 'external_service',
+      name: 'Grafana UI',
+      provider: 'grafana-stack',
+      platform: 'grafana',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'Builder dashboard surface for logs, traces, metrics, and provider/DB health.',
+      tags: ['grafana', 'dashboard'],
+      metadata: {
+        localUrl: 'http://localhost:3300'
+      }
+    },
+    {
+      ...base,
+      id: 'external_service:builder-portainer-ui',
+      kind: 'external_service',
+      name: 'Portainer UI',
+      provider: 'portainer',
+      platform: 'portainer-ce',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: 'External manager UI linked from the Docker provider panel.',
+      tags: ['portainer', 'dashboard'],
+      metadata: {
+        localUrl: 'http://localhost:9000'
+      }
+    }
+  ]
+
+  const relations: Relation[] = [
+    ...entities
+      .filter((entity) => entity.id !== 'project:builder')
+      .map((entity) => relation('project:builder', entity.id, 'owns', 'builder-seed')),
+    relation('repo:builder-local', 'service:builder-web', 'contains', 'local-folder'),
+    relation('repo:builder-local', 'service:builder-api', 'contains', 'local-folder'),
+    relation('repo:builder-local', 'service:builder-provider-runtime', 'contains', 'local-folder'),
+    relation('pipeline:builder-local-setup', 'service:builder-web', 'deployed_as', 'npm'),
+    relation('pipeline:builder-local-setup', 'service:builder-api', 'deployed_as', 'npm'),
+    relation('pipeline:builder-local-setup', 'service:builder-provider-runtime', 'deployed_as', 'npm'),
+    relation('service:builder-web', 'runtime:builder-nuxt-dev', 'runs_on', 'node'),
+    relation('service:builder-api', 'runtime:builder-nuxt-dev', 'runs_on', 'node'),
+    relation('service:builder-provider-runtime', 'runtime:builder-nuxt-dev', 'runs_on', 'node'),
+    relation('runtime:builder-nuxt-dev', 'host:local-workstation', 'runs_on', 'local'),
+    relation('runtime:builder-docker', 'host:local-workstation', 'runs_on', 'docker'),
+    relation('service:builder-web', 'service:builder-api', 'uses', 'http'),
+    relation('service:builder-api', 'database:builder-surrealdb', 'uses', 'surrealdb'),
+    relation('service:builder-api', 'secret_store:builder-provider-secrets', 'secured_by', 'builder'),
+    relation('service:builder-api', 'external_service:builder-grafana-ui', 'uses', 'grafana'),
+    relation('service:builder-provider-runtime', 'runtime:builder-docker', 'uses', 'docker-cli'),
+    relation('service:builder-provider-runtime', 'external_service:builder-github', 'uses', 'github'),
+    relation('service:builder-provider-runtime', 'external_service:builder-portainer-ui', 'uses', 'portainer'),
+    relation('service:builder-database', 'container:builder-surrealdb', 'deployed_as', 'docker-compose'),
+    relation('service:builder-database', 'database:builder-surrealdb', 'uses', 'surrealdb'),
+    relation('service:builder-database', 'storage:builder-docker-volumes', 'uses', 'docker-volume'),
+    relation('service:builder-docker-manager', 'container:builder-portainer', 'deployed_as', 'docker-compose'),
+    relation('service:builder-docker-manager', 'runtime:builder-docker', 'runs_on', 'docker-compose'),
+    relation('service:builder-docker-manager', 'external_service:builder-portainer-ui', 'exposed_by', 'http'),
+    relation('service:builder-docker-manager', 'storage:builder-docker-volumes', 'uses', 'docker-volume'),
+    relation('service:builder-observability', 'container:builder-grafana', 'deployed_as', 'docker-compose'),
+    relation('service:builder-observability', 'container:builder-loki', 'deployed_as', 'docker-compose'),
+    relation('service:builder-observability', 'container:builder-tempo', 'deployed_as', 'docker-compose'),
+    relation('service:builder-observability', 'container:builder-prometheus', 'deployed_as', 'docker-compose'),
+    relation('service:builder-observability', 'container:builder-alloy', 'deployed_as', 'docker-compose'),
+    relation('service:builder-observability', 'external_service:builder-grafana-ui', 'exposed_by', 'http'),
+    relation('service:builder-observability', 'storage:builder-docker-volumes', 'uses', 'docker-volume'),
+    ...entities
+      .filter((entity) => entity.kind === 'container')
+      .map((entity) => relation(entity.id, 'runtime:builder-docker', 'runs_on', 'docker')),
+    relation('database:builder-surrealdb', 'container:builder-surrealdb', 'managed_by', 'docker-compose'),
+    relation('secret_store:builder-provider-secrets', 'database:builder-surrealdb', 'managed_by', 'surrealdb'),
+    relation('domain:builder-localhost', 'service:builder-web', 'exposed_by', 'localhost')
+  ]
+
+  const deployments: Deployment[] = [
+    deployment('builder-web-local', 'service:builder-web', 'runtime:builder-nuxt-dev', '0.1.0', 'npm run dev'),
+    deployment('builder-api-local', 'service:builder-api', 'runtime:builder-nuxt-dev', '0.1.0', 'npm run dev'),
+    deployment('builder-provider-runtime-local', 'service:builder-provider-runtime', 'runtime:builder-nuxt-dev', '0.1.0', 'provider registry'),
+    deployment('builder-database-local', 'service:builder-database', 'container:builder-surrealdb', 'surrealdb:v2', 'docker compose'),
+    deployment('builder-docker-manager-local', 'service:builder-docker-manager', 'container:builder-portainer', 'portainer-ce:2.39.1', 'docker compose'),
+    deployment('builder-observability-local', 'service:builder-observability', 'container:builder-grafana', 'grafana stack', 'docker compose')
+  ]
+
+  const collectors: Collector[] = [
+    {
+      id: 'collector:local-folder:builder',
+      name: 'Builder workspace',
+      kind: 'git',
+      target: 'C:\\Users\\paulp\\Documents\\builder',
+      status: 'connected',
+      mode: 'read_only',
+      lastRun: generatedAt,
+      summary: 'Local source tree for app, server, providers, observability, scripts, and schema.'
+    },
+    {
+      id: 'collector:github:builder',
+      name: 'GitHub / Paul-Arm',
+      kind: 'git',
+      target: 'Paul-Arm/builder',
+      status: 'connected',
+      mode: 'read_only',
+      lastRun: generatedAt,
+      summary: 'Remote repository, branches, and provider metadata.'
+    },
+    {
+      id: 'collector:docker-cli:local',
+      name: 'Docker CLI / local',
+      kind: 'docker',
+      target: 'local-docker',
+      status: 'connected',
+      mode: 'write_capable',
+      lastRun: generatedAt,
+      summary: 'Builder Compose containers plus local Docker lifecycle actions.'
+    },
+    {
+      id: 'collector:grafana-stack:local',
+      name: 'Grafana Stack',
+      kind: 'cloud',
+      target: 'localhost',
+      status: 'connected',
+      mode: 'read_only',
+      lastRun: generatedAt,
+      summary: 'Grafana, Loki, Tempo, Prometheus, and Alloy for Builder observability.'
+    }
+  ]
+
+  const insights: Insight[] = [
+    {
+      id: 'insight:builder-self-map',
+      severity: 'info',
+      title: 'Builder is mapped as the only default project',
+      entityId: 'project:builder',
+      description: 'Seed inventory now reflects this local Builder app instead of demo checkout, portal, or analytics projects.'
+    },
+    {
+      id: 'insight:portainer-manager',
+      severity: 'info',
+      title: 'Docker management is delegated to Portainer',
+      entityId: 'service:builder-docker-manager',
+      description: 'Builder keeps graph, status, metrics, and quick actions while Portainer owns the deep Docker management UI.'
+    }
+  ]
 
   return {
     generatedAt,
     mode: 'mixed',
     source: 'seed',
-    entities: [
-      {
-        id: 'project:checkout',
-        kind: 'project',
-        name: 'Checkout',
-        provider: 'internal',
-        platform: 'product',
-        owner: 'Payments',
-        health: 'healthy',
-        description: 'Customer checkout and order orchestration.',
-        tags: ['tier-1', 'payments'],
-        confidence: 0.96,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'project:analytics',
-        kind: 'project',
-        name: 'Analytics',
-        provider: 'internal',
-        platform: 'data-product',
-        owner: 'Data',
-        health: 'degraded',
-        description: 'Event ingestion and reporting pipeline.',
-        tags: ['batch', 'events'],
-        confidence: 0.9,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'project:builder',
-        kind: 'project',
-        name: 'Builder',
-        provider: 'internal',
-        platform: 'platform-app',
-        owner: 'Platform',
-        health: 'healthy',
-        description: 'Environment graph and deployment inventory.',
-        tags: ['platform', 'deployment-management'],
-        confidence: 1,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'project:portal',
-        kind: 'project',
-        name: 'Customer Portal',
-        provider: 'internal',
-        platform: 'product',
-        owner: 'Experience',
-        health: 'healthy',
-        description: 'Customer self-service portal sharing checkout data resources.',
-        tags: ['customer-facing', 'shared-resources'],
-        confidence: 0.91,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'service:checkout-api',
-        kind: 'service',
-        name: 'checkout-api',
-        provider: 'internal',
-        platform: 'node',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['http', 'api'],
-        confidence: 0.94,
-        lastSeen: generatedAt,
-        metadata: {
-          sourcePath: 'apps/backend',
-          component: 'backend'
-        }
-      },
-      {
-        id: 'service:billing-worker',
-        kind: 'service',
-        name: 'billing-worker',
-        provider: 'internal',
-        platform: 'node',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['worker', 'queue'],
-        confidence: 0.88,
-        lastSeen: generatedAt,
-        metadata: {
-          sourcePath: 'workers/billing',
-          component: 'worker'
-        }
-      },
-      {
-        id: 'service:analytics-ingest',
-        kind: 'service',
-        name: 'analytics-ingest',
-        provider: 'internal',
-        platform: 'go',
-        owner: 'Data',
-        health: 'degraded',
-        tags: ['events', 'ingest'],
-        confidence: 0.87,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'service:portal-web',
-        kind: 'service',
-        name: 'portal-web',
-        provider: 'internal',
-        platform: 'nuxt',
-        owner: 'Experience',
-        health: 'healthy',
-        tags: ['http', 'frontend'],
-        confidence: 0.88,
-        lastSeen: generatedAt,
-        metadata: {
-          sourcePath: 'apps/frontend',
-          component: 'frontend'
-        }
-      },
-      {
-        id: 'service:builder-ui',
-        kind: 'service',
-        name: 'builder-ui',
-        provider: 'internal',
-        platform: 'nuxt',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['ui', 'inventory'],
-        confidence: 1,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'repo:commerce-platform',
-        kind: 'repo',
-        name: 'github.com/acme/commerce-platform',
-        provider: 'github',
-        platform: 'monorepo',
-        owner: 'Product Engineering',
-        health: 'healthy',
-        tags: ['source', 'monorepo'],
-        confidence: 1,
-        lastSeen: generatedAt,
-        metadata: {
-          default_branch: 'main',
-          branches: 'main, staging, local-lab',
-          services: 'checkout-api, billing-worker, portal-web',
-          paths: 'apps/backend, workers/billing, apps/frontend'
-        }
-      },
-      {
-        id: 'repo:builder',
-        kind: 'repo',
-        name: 'github.com/acme/builder',
-        provider: 'github',
-        platform: 'git',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['source'],
-        confidence: 1,
-        lastSeen: generatedAt,
-        metadata: {
-          default_branch: 'main',
-          branches: 'main, local',
-          services: 'builder-ui',
-          paths: 'app'
-        }
-      },
-      {
-        id: 'repo:builder-local',
-        kind: 'repo',
-        name: 'C:\\Users\\paulp\\Documents\\builder',
-        provider: 'local-folder',
-        platform: 'workspace',
-        owner: 'Platform',
-        health: 'healthy',
-        description: 'Local builder workspace folder.',
-        tags: ['source', 'local-folder', 'workspace'],
-        confidence: 1,
-        lastSeen: generatedAt,
-        metadata: {
-          default_branch: 'local',
-          branches: 'local',
-          services: 'builder-ui',
-          paths: 'app'
-        }
-      },
-      {
-        id: 'cluster:prod-eu',
-        kind: 'cluster',
-        name: 'k8s-prod-eu',
-        provider: 'aws',
-        platform: 'eks',
-        environment: 'prod',
-        region: 'eu-central-1',
-        account: 'prod-main',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['kubernetes', 'prod'],
-        externalId: 'arn:aws:eks:eu-central-1:111111111111:cluster/prod-eu',
-        confidence: 0.96,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'host:mac-mini-01',
-        kind: 'host',
-        name: 'mac-mini-01',
-        provider: 'local',
-        platform: 'macos',
-        environment: 'local',
-        region: 'office',
-        owner: 'Platform',
-        health: 'healthy',
-        description: 'Local Mac mini target for Docker, OrbStack, and Bash collectors.',
-        tags: ['mac-mini', 'edge', 'local-hardware'],
-        confidence: 1,
-        lastSeen: generatedAt,
-        metadata: {
-          cpu: 'Apple Silicon',
-          memory_gb: 32,
-          write_access: false
-        }
-      },
-      {
-        id: 'runtime:orbstack:mac-mini-01',
-        kind: 'runtime',
-        name: 'OrbStack',
-        provider: 'orbstack',
-        platform: 'docker-compatible',
-        environment: 'local',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['docker', 'compose'],
-        confidence: 0.92,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'container:checkout-api-local',
-        kind: 'container',
-        name: 'checkout-api-local',
-        provider: 'local',
-        platform: 'docker',
-        environment: 'local',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['compose', 'port:3001'],
-        confidence: 0.9,
-        lastSeen: generatedAt,
-        metadata: {
-          image: 'ghcr.io/acme/checkout-api:1.14.2',
-          ports: '3001:3000'
-        }
-      },
-      {
-        id: 'container:postgres-local',
-        kind: 'container',
-        name: 'postgres-local',
-        provider: 'local',
-        platform: 'docker',
-        environment: 'local',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['compose', 'stateful'],
-        confidence: 0.9,
-        lastSeen: generatedAt,
-        metadata: {
-          image: 'postgres:16',
-          volume: 'orders-pgdata'
-        }
-      },
-      {
-        id: 'database_server:orders-prod',
-        kind: 'database_server',
-        name: 'orders-prod-rds',
-        provider: 'aws',
-        platform: 'rds-postgres',
-        environment: 'prod',
-        region: 'eu-central-1',
-        account: 'prod-main',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['postgres', 'rds', 'iac'],
-        confidence: 0.98,
-        lastSeen: generatedAt,
-        metadata: {
-          iacEngine: 'opentofu',
-          iacResourceType: 'aws_db_instance'
-        }
-      },
-      {
-        id: 'database:orders-prod',
-        kind: 'database',
-        name: 'orders-prod',
-        provider: 'aws',
-        platform: 'rds-postgres',
-        environment: 'prod',
-        region: 'eu-central-1',
-        account: 'prod-main',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['postgres', 'pii'],
-        confidence: 0.98,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'database:orders-local',
-        kind: 'database',
-        name: 'orders-local',
-        provider: 'local',
-        platform: 'postgres',
-        environment: 'local',
-        owner: 'Platform',
-        health: 'healthy',
-        tags: ['postgres', 'compose'],
-        confidence: 0.9,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'storage:invoice-uploads',
-        kind: 'storage',
-        name: 'invoice-uploads',
-        provider: 'aws',
-        platform: 's3',
-        environment: 'prod',
-        region: 'eu-central-1',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['object-storage'],
-        confidence: 0.95,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'queue:billing-events',
-        kind: 'queue',
-        name: 'billing-events',
-        provider: 'aws',
-        platform: 'sqs',
-        environment: 'prod',
-        region: 'eu-central-1',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['events'],
-        confidence: 0.93,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'domain:checkout',
-        kind: 'domain',
-        name: 'checkout.example.com',
-        provider: 'cloudflare',
-        platform: 'dns',
-        environment: 'prod',
-        owner: 'Payments',
-        health: 'healthy',
-        tags: ['public'],
-        confidence: 0.91,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'domain:portal',
-        kind: 'domain',
-        name: 'portal.example.com',
-        provider: 'cloudflare',
-        platform: 'dns',
-        environment: 'prod',
-        owner: 'Experience',
-        health: 'healthy',
-        tags: ['public'],
-        confidence: 0.9,
-        lastSeen: generatedAt
-      },
-      {
-        id: 'secret:vault-prod',
-        kind: 'secret_store',
-        name: 'vault-prod',
-        provider: 'hashicorp',
-        platform: 'vault',
-        environment: 'prod',
-        owner: 'Security',
-        health: 'healthy',
-        tags: ['secrets'],
-        confidence: 0.89,
-        lastSeen: generatedAt
+    entities,
+    relations,
+    deployments,
+    collectors,
+    insights
+  }
+
+  function container(name: string, image: string, ports: string): Entity {
+    const composeService = name.replace(/^builder-/, '')
+
+    return {
+      ...base,
+      id: `container:${name}`,
+      kind: 'container',
+      name,
+      provider: 'docker-cli',
+      platform: 'docker-compose',
+      environment: 'local',
+      owner: 'Paul',
+      health: 'healthy',
+      description: `Docker Compose container for the ${composeService} service.`,
+      tags: ['docker', 'compose', `service:${composeService}`],
+      metadata: {
+        image,
+        composeProject: 'builder',
+        composeService,
+        ports
       }
-    ],
-    relations: [
-      relation('host:mac-mini-01', 'runtime:orbstack:mac-mini-01', 'runs_on', 'orbstack'),
-      relation('project:checkout', 'service:checkout-api', 'owns', 'catalog'),
-      relation('project:checkout', 'service:billing-worker', 'owns', 'catalog'),
-      relation('project:analytics', 'service:analytics-ingest', 'owns', 'catalog'),
-      relation('project:builder', 'service:builder-ui', 'owns', 'catalog'),
-      relation('project:portal', 'service:portal-web', 'owns', 'catalog'),
-      relation('repo:commerce-platform', 'service:checkout-api', 'contains', 'github'),
-      relation('repo:commerce-platform', 'service:billing-worker', 'contains', 'github'),
-      relation('repo:commerce-platform', 'service:portal-web', 'contains', 'github'),
-      relation('repo:builder', 'service:builder-ui', 'contains', 'github'),
-      relation('repo:builder-local', 'service:builder-ui', 'contains', 'local-folder'),
-      relation('service:checkout-api', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
-      relation('service:billing-worker', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
-      relation('service:analytics-ingest', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
-      relation('service:portal-web', 'cluster:prod-eu', 'runs_on', 'kubernetes'),
-      relation('service:builder-ui', 'runtime:orbstack:mac-mini-01', 'runs_on', 'orbstack'),
-      relation('container:checkout-api-local', 'runtime:orbstack:mac-mini-01', 'runs_on', 'docker'),
-      relation('container:postgres-local', 'runtime:orbstack:mac-mini-01', 'runs_on', 'docker'),
-      relation('service:checkout-api', 'container:checkout-api-local', 'deployed_as', 'docker'),
-      relation('container:postgres-local', 'database:orders-local', 'managed_by', 'docker'),
-      relation('database_server:orders-prod', 'database:orders-prod', 'managed_by', 'opentofu'),
-      relation('database_server:orders-prod', 'database:orders-prod', 'contains', 'opentofu'),
-      relation('service:checkout-api', 'database:orders-prod', 'uses', 'opentofu'),
-      relation('service:portal-web', 'database:orders-prod', 'uses', 'opentofu'),
-      relation('service:checkout-api', 'database:orders-local', 'uses', 'docker-compose'),
-      relation('service:checkout-api', 'storage:invoice-uploads', 'uses', 'opentofu'),
-      relation('service:portal-web', 'storage:invoice-uploads', 'uses', 'opentofu'),
-      relation('service:checkout-api', 'queue:billing-events', 'publishes', 'opentelemetry'),
-      relation('service:billing-worker', 'queue:billing-events', 'subscribes', 'opentelemetry'),
-      relation('service:analytics-ingest', 'queue:billing-events', 'subscribes', 'opentelemetry'),
-      relation('domain:checkout', 'service:checkout-api', 'exposed_by', 'cloudflare'),
-      relation('domain:portal', 'service:portal-web', 'exposed_by', 'cloudflare'),
-      relation('service:checkout-api', 'secret:vault-prod', 'secured_by', 'vault')
-    ],
-    deployments: [
-      {
-        id: 'deployment:checkout-api-prod',
-        projectId: 'project:checkout',
-        serviceId: 'service:checkout-api',
-        environment: 'prod',
-        targetId: 'cluster:prod-eu',
-        version: '1.14.2',
-        status: 'active',
-        branch: 'main',
-        sourcePath: 'apps/backend',
-        commit: '9b7c2af',
-        actor: 'github-actions',
-        deployedAt: '2026-05-31T12:42:00.000+02:00',
-        source: 'github-actions'
-      },
-      {
-        id: 'deployment:checkout-api-dev',
-        projectId: 'project:checkout',
-        serviceId: 'service:checkout-api',
-        environment: 'dev',
-        targetId: 'container:checkout-api-local',
-        version: '1.15.0-dev',
-        status: 'active',
-        branch: 'develop',
-        sourcePath: 'apps/backend',
-        commit: 'd14f0c8',
-        actor: 'local-agent',
-        deployedAt: '2026-05-31T16:05:00.000+02:00',
-        source: 'orbstack'
-      },
-      {
-        id: 'deployment:checkout-api-feature-abc',
-        projectId: 'project:checkout',
-        serviceId: 'service:checkout-api',
-        environment: 'feature-abc',
-        targetId: 'container:checkout-api-local',
-        version: 'pr-148',
-        status: 'rolling',
-        branch: 'feature-abc',
-        sourcePath: 'apps/backend',
-        commit: '71feabc',
-        actor: 'local-agent',
-        deployedAt: '2026-05-31T16:18:00.000+02:00',
-        source: 'orbstack'
-      },
-      {
-        id: 'deployment:billing-worker-prod',
-        projectId: 'project:checkout',
-        serviceId: 'service:billing-worker',
-        environment: 'prod',
-        targetId: 'cluster:prod-eu',
-        version: '1.14.0',
-        status: 'active',
-        branch: 'main',
-        sourcePath: 'workers/billing',
-        commit: '80c1ab2',
-        actor: 'github-actions',
-        deployedAt: '2026-05-30T19:15:00.000+02:00',
-        source: 'github-actions'
-      },
-      {
-        id: 'deployment:analytics-prod',
-        projectId: 'project:analytics',
-        serviceId: 'service:analytics-ingest',
-        environment: 'prod',
-        targetId: 'cluster:prod-eu',
-        version: '0.22.7',
-        status: 'rolling',
-        branch: 'main',
-        sourcePath: 'pipelines/analytics',
-        commit: '31f0ada',
-        actor: 'argo-cd',
-        deployedAt: '2026-05-31T10:05:00.000+02:00',
-        source: 'argocd'
-      },
-      {
-        id: 'deployment:portal-prod',
-        projectId: 'project:portal',
-        serviceId: 'service:portal-web',
-        environment: 'prod',
-        targetId: 'cluster:prod-eu',
-        version: '2.8.1',
-        status: 'active',
-        branch: 'staging',
-        sourcePath: 'apps/frontend',
-        commit: '2db57bf',
-        actor: 'github-actions',
-        deployedAt: '2026-05-31T11:22:00.000+02:00',
-        source: 'github-actions'
-      },
-      {
-        id: 'deployment:portal-dev',
-        projectId: 'project:portal',
-        serviceId: 'service:portal-web',
-        environment: 'dev',
-        targetId: 'runtime:orbstack:mac-mini-01',
-        version: '2.9.0-dev',
-        status: 'active',
-        branch: 'develop',
-        sourcePath: 'apps/frontend',
-        commit: 'f01a4d2',
-        actor: 'local-agent',
-        deployedAt: '2026-05-31T16:12:00.000+02:00',
-        source: 'orbstack'
-      },
-      {
-        id: 'deployment:portal-feature-abc',
-        projectId: 'project:portal',
-        serviceId: 'service:portal-web',
-        environment: 'feature-abc',
-        targetId: 'runtime:orbstack:mac-mini-01',
-        version: 'pr-148',
-        status: 'active',
-        branch: 'feature-abc',
-        sourcePath: 'apps/frontend',
-        commit: '71feabc',
-        actor: 'local-agent',
-        deployedAt: '2026-05-31T16:21:00.000+02:00',
-        source: 'orbstack'
-      },
-      {
-        id: 'deployment:builder-local',
-        projectId: 'project:builder',
-        serviceId: 'service:builder-ui',
-        environment: 'local',
-        targetId: 'runtime:orbstack:mac-mini-01',
-        version: '0.1.0',
-        status: 'active',
-        branch: 'local',
-        sourcePath: 'app',
-        commit: 'local',
-        actor: 'local-agent',
-        deployedAt: '2026-05-31T15:58:00.000+02:00',
-        source: 'orbstack'
-      }
-    ],
-    collectors: [
-      {
-        id: 'collector:orbstack:mac-mini-01',
-        name: 'OrbStack / Docker',
-        kind: 'orbstack',
-        target: 'mac-mini-01',
-        status: 'connected',
-        mode: 'write_capable',
-        lastRun: generatedAt,
-        summary: '2 containers, 1 runtime, 1 local database'
-      },
-      {
-        id: 'collector:bash:mac-mini-01',
-        name: 'Bash JSON Collectors',
-        kind: 'bash',
-        target: 'mac-mini-01',
-        status: 'disabled',
-        mode: 'write_capable',
-        summary: 'Plugin contract ready'
-      },
-      {
-        id: 'collector:opentofu:prod',
-        name: 'OpenTofu State',
-        kind: 'opentofu',
-        target: 'prod-main',
-        status: 'connected',
-        mode: 'write_capable',
-        lastRun: generatedAt,
-        summary: 'RDS, S3, SQS, EKS, DNS resources'
-      },
-      {
-        id: 'collector:kubernetes:prod-eu',
-        name: 'Kubernetes',
-        kind: 'kubernetes',
-        target: 'k8s-prod-eu',
-        status: 'connected',
-        mode: 'write_capable',
-        lastRun: generatedAt,
-        summary: '3 services, 1 rolling deployment'
-      },
-      {
-        id: 'collector:git:github',
-        name: 'GitHub',
-        kind: 'git',
-        target: 'acme',
-        status: 'connected',
-        mode: 'write_capable',
-        lastRun: generatedAt,
-        summary: 'Monorepos, branches, commits, deployment actors'
-      }
-    ],
-    insights: [
-      {
-        id: 'insight:analytics-rolling',
-        severity: 'warning',
-        title: 'Analytics rollout still in progress',
-        entityId: 'project:analytics',
-        description: 'analytics-ingest is rolling while downstream reports still depend on billing-events.'
-      },
-      {
-        id: 'insight:local-actions',
-        severity: 'info',
-        title: 'Local agent can manage deployments',
-        entityId: 'host:mac-mini-01',
-        description: 'Docker and OrbStack lifecycle actions are available through provider action plans.'
-      }
-    ]
+    }
+  }
+
+  function deployment(
+    id: string,
+    serviceId: string,
+    targetId: string,
+    version: string,
+    actor: string
+  ): Deployment {
+    return {
+      id: `deployment:${id}`,
+      projectId: 'project:builder',
+      serviceId,
+      environment: 'local',
+      targetId,
+      version,
+      status: 'active',
+      branch: 'master',
+      sourcePath: serviceSourcePath(serviceId),
+      commit: 'local',
+      actor,
+      deployedAt: generatedAt,
+      source: actor
+    }
   }
 }
 
-function relation(
-  from: string,
-  to: string,
-  type: InventoryDataset['relations'][number]['type'],
-  source: string
-): InventoryDataset['relations'][number] {
+function relation(from: string, to: string, type: Relation['type'], source: string): Relation {
   return {
     id: `relation:${from}:${type}:${to}`,
     from,
     to,
     type,
     source,
-    confidence: source === 'opentelemetry' ? 0.82 : 0.92
+    confidence: 1
   }
+}
+
+function serviceSourcePath(serviceId: string) {
+  const paths: Record<string, string> = {
+    'service:builder-web': 'app',
+    'service:builder-api': 'server',
+    'service:builder-provider-runtime': 'providers,server/providers',
+    'service:builder-database': 'surreal,scripts',
+    'service:builder-observability': 'observability',
+    'service:builder-docker-manager': 'docker-compose.yml,providers/docker-cli'
+  }
+
+  return paths[serviceId] || '.'
 }

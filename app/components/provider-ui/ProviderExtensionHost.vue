@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import LocalFolderProviderPanel from '../../../providers/local-folder/ProviderPanel.vue'
 import GitHubProviderPanel from '../../../providers/github/ProviderPanel.vue'
+import DockerProviderPanel from '../../../providers/docker-cli/ProviderPanel.vue'
 import {
   registerProviderUiComponent,
   resolveProviderUiComponent
@@ -26,6 +27,7 @@ defineEmits<{
 
 registerProviderUiComponent('local-folder-panel', LocalFolderProviderPanel)
 registerProviderUiComponent('github-panel', GitHubProviderPanel)
+registerProviderUiComponent('docker-cli-panel', DockerProviderPanel)
 
 const selectedAddOptionId = ref('')
 

@@ -17,6 +17,18 @@ services:
       - surrealdb-data:/data
     restart: unless-stopped
 
+  portainer:
+    image: portainer/portainer-ce:2.39.1
+    command:
+      - --http-enabled
+    ports:
+      - "127.0.0.1:${PORTAINER_PORT:-9000}:9000"
+      - "127.0.0.1:${PORTAINER_HTTPS_PORT:-9443}:9443"
+    volumes:
+      - portainer-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana-oss:latest
     ports:
@@ -95,6 +107,7 @@ services:
 
 volumes:
   surrealdb-data:
+  portainer-data:
   grafana-data:
   loki-data:
   tempo-data:

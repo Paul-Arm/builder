@@ -47,7 +47,7 @@ The initial schema lives in `surreal/schema.surql`. Base inventory is inserted i
 
 Manual project edits are stored in `project_overlay`, and UI-saved provider secrets are stored in `provider_secret`. If SurrealDB is unreachable, the app falls back to seed data plus the local `.data` files.
 
-Use a stable `uid` field for graph identities, for example `project:checkout` or `host:mac-mini-01`. The API maps `uid` to the frontend `id` and falls back to the SurrealDB record id when `uid` is missing.
+Use a stable `uid` field for graph identities, for example `project:builder` or `host:local-workstation`. The API maps `uid` to the frontend `id` and falls back to the SurrealDB record id when `uid` is missing.
 
 ## OpenTofu Backbone
 

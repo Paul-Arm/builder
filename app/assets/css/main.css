@@ -25,9 +25,16 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#__nuxt {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  overflow: hidden;
   color: var(--ink);
   color-scheme: light;
   background: var(--bg);
@@ -49,7 +56,9 @@ button:disabled {
 .app-frame {
   display: flex;
   align-items: stretch;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 .app-sidebar-inner {
@@ -1003,6 +1012,152 @@ button:disabled {
   color: var(--red);
 }
 
+.docker-provider-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.docker-manager-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf8;
+  padding: 10px;
+}
+
+.docker-manager-controls,
+.docker-manager-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docker-manager-controls {
+  justify-content: flex-end;
+}
+
+.docker-manager-areas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.docker-manager-areas a,
+.docker-manager-areas button {
+  justify-content: flex-start;
+}
+
+.docker-resource-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.docker-resource-stat {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px;
+}
+
+.docker-resource-stat svg {
+  color: var(--teal);
+}
+
+.docker-resource-stat span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.docker-resource-stat strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.docker-collector-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.docker-metrics-panel {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.docker-metric-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.docker-metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, auto);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid rgba(32, 36, 35, 0.08);
+  background: #fff;
+  padding: 9px;
+}
+
+.docker-metric-row:first-child {
+  border-top: 0;
+}
+
+.docker-metric-row strong,
+.docker-metric-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docker-metric-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.docker-metric-values {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.docker-metric-values span {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: var(--blue);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .github-connection-card {
   display: flex;
   align-items: center;
@@ -1592,8 +1747,13 @@ button:disabled {
 
 .workspace {
   flex: 1 1 auto;
+  height: 100dvh;
   min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 18px;
+  overscroll-behavior: contain;
 }
 
 .topbar {
@@ -2408,6 +2568,291 @@ h1 {
   color: var(--red);
 }
 
+.dashboard2-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-areas:
+    "summary summary"
+    "graph detail";
+  align-items: stretch;
+  gap: 14px;
+}
+
+.dashboard2-summary-row {
+  grid-area: summary;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard2-stat {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+
+.dashboard2-stat span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dashboard2-stat strong {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.dashboard2-graph {
+  grid-area: graph;
+  min-height: 700px;
+}
+
+.dashboard2-detail-panel {
+  grid-area: detail;
+}
+
+.dashboard2-scope-select {
+  width: 150px;
+}
+
+.auto-graph-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 640px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.auto-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  background: rgba(253, 252, 248, 0.94);
+  padding: 10px 12px;
+}
+
+.auto-graph-toolbar > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.auto-graph-toolbar strong,
+.auto-graph-toolbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auto-graph-toolbar strong {
+  font-size: 13px;
+}
+
+.auto-graph-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auto-graph-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-graph-viewport {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background:
+    linear-gradient(rgba(32, 36, 35, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(32, 36, 35, 0.05) 1px, transparent 1px),
+    #fdfcf8;
+  background-size: 30px 30px;
+}
+
+.auto-graph-canvas {
+  position: relative;
+  min-width: 100%;
+}
+
+.auto-graph-lines {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.auto-graph-lines path {
+  fill: none;
+  stroke: rgba(69, 82, 79, 0.46);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.74;
+  vector-effect: non-scaling-stroke;
+}
+
+.auto-graph-lines path[data-type="owns"],
+.auto-graph-lines path[data-type="contains"] {
+  stroke: rgba(31, 138, 91, 0.7);
+}
+
+.auto-graph-lines path[data-type="uses"],
+.auto-graph-lines path[data-type="secured_by"] {
+  stroke: rgba(47, 111, 188, 0.72);
+}
+
+.auto-graph-lines path[data-type="publishes"],
+.auto-graph-lines path[data-type="subscribes"],
+.auto-graph-lines path[data-type="exposed_by"] {
+  stroke: rgba(184, 117, 3, 0.68);
+}
+
+.auto-graph-lines path[data-type="runs_on"],
+.auto-graph-lines path[data-type="deployed_as"],
+.auto-graph-lines path[data-type="deployed_from"],
+.auto-graph-lines path[data-type="managed_by"] {
+  stroke: rgba(16, 125, 130, 0.72);
+}
+
+.auto-graph-lines path.selected {
+  opacity: 1;
+  stroke-width: 3;
+}
+
+.auto-graph-lines path.dimmed {
+  opacity: 0.14;
+}
+
+.auto-graph-lines marker path {
+  fill: rgba(69, 82, 79, 0.54);
+  stroke: none;
+}
+
+.auto-graph-lines marker[data-type="owns"] path,
+.auto-graph-lines marker[data-type="contains"] path {
+  fill: rgba(31, 138, 91, 0.78);
+}
+
+.auto-graph-lines marker[data-type="uses"] path,
+.auto-graph-lines marker[data-type="secured_by"] path {
+  fill: rgba(47, 111, 188, 0.78);
+}
+
+.auto-graph-node {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid #cfd8d1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 28px rgba(32, 36, 35, 0.09);
+  color: var(--ink);
+  padding: 9px;
+  text-align: left;
+}
+
+.auto-graph-node:hover,
+.auto-graph-node.selected {
+  border-color: var(--green);
+  outline: 2px solid rgba(31, 138, 91, 0.14);
+  z-index: 4;
+}
+
+.auto-graph-node.connected {
+  border-color: rgba(16, 125, 130, 0.42);
+}
+
+.auto-graph-node.dimmed {
+  opacity: 0.38;
+}
+
+.auto-graph-node[data-kind="project"] {
+  border-color: rgba(31, 138, 91, 0.34);
+  background: #f5faf7;
+}
+
+.auto-graph-node[data-kind="database"],
+.auto-graph-node[data-kind="database_server"],
+.auto-graph-node[data-kind="storage"],
+.auto-graph-node[data-kind="secret_store"] {
+  background: #f8fbff;
+}
+
+.auto-graph-node-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(32, 36, 35, 0.08);
+  border-radius: 8px;
+  background: #eef4ef;
+  color: var(--teal);
+}
+
+.auto-graph-node-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.auto-graph-node strong,
+.auto-graph-node small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auto-graph-node strong {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.auto-graph-node small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.auto-graph-node-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.auto-graph-node-footer > span:last-child {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 @media (max-width: 1180px) {
   .content-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -2428,12 +2873,21 @@ h1 {
   .target-console,
   .projects-console,
   .iac-console,
-  .grafana-console {
+  .grafana-console,
+  .dashboard2-console {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .dashboard2-console {
+    grid-template-areas:
+      "summary"
+      "graph"
+      "detail";
+  }
+
   .iac-summary-row,
-  .grafana-health-row {
+  .grafana-health-row,
+  .dashboard2-summary-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2517,7 +2971,8 @@ h1 {
   }
 
   .grafana-health-row,
-  .grafana-slot-tabs {
+  .grafana-slot-tabs,
+  .dashboard2-summary-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2545,12 +3000,49 @@ h1 {
     min-height: 560px;
   }
 
+  .auto-graph-panel {
+    min-height: 560px;
+  }
+
+  .auto-graph-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auto-graph-toolbar-actions {
+    justify-content: space-between;
+  }
+
+  .dashboard2-scope-select {
+    width: 100%;
+  }
+
   .topology-node {
     width: 132px;
   }
 
   .collector-card {
     grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .docker-manager-card,
+  .docker-collector-row,
+  .docker-metric-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .docker-manager-card {
+    display: grid;
+  }
+
+  .docker-manager-controls,
+  .docker-metric-values {
+    justify-content: flex-start;
+  }
+
+  .docker-manager-areas,
+  .docker-resource-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .deployment-card {

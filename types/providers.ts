@@ -90,6 +90,17 @@ export interface ProviderObservation {
   payload: Record<string, unknown>
 }
 
+export interface ProviderDeploymentMetrics {
+  cpuPercent?: number
+  memoryUsageBytes?: number
+  memoryLimitBytes?: number
+  memoryPercent?: number
+  networkRxBytes?: number
+  networkTxBytes?: number
+  blockReadBytes?: number
+  blockWriteBytes?: number
+}
+
 export interface ProviderDeploymentRef {
   id: string
   providerId: string
@@ -105,6 +116,7 @@ export interface ProviderDeploymentRef {
   ports: string[]
   labels: Record<string, string>
   actions: DeploymentActionKind[]
+  metrics?: ProviderDeploymentMetrics
   observedAt: string
 }
 

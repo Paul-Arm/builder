@@ -24,6 +24,13 @@ const mainNavigationItems = computed(() => [
     tooltip: true
   },
   {
+    label: 'Dashboard 2',
+    to: '/dashboard-2',
+    icon: 'i-lucide-git-fork',
+    active: isActive('/dashboard-2'),
+    tooltip: true
+  },
+  {
     label: 'Projects',
     to: '/projects',
     icon: 'i-lucide-folder-kanban',
